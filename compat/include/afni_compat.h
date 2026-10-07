@@ -94,6 +94,11 @@ AFNI_COMPAT_API FILE *afni_compat_popen(const char *command, const char *mode);
 AFNI_COMPAT_API int afni_compat_pclose(FILE *stream);
 AFNI_COMPAT_API int afni_compat_system(const char *command);
 
+/* Not POSIX: starts "sh -c command" like system() but does not wait; the
+   child is reaped with wait()/waitpid(). Returns 0 or an errno value. Used
+   where upstream runs system() in a fork()ed child (patches/0010). */
+AFNI_COMPAT_API int afni_compat_spawn_shell(pid_t *pid, const char *command);
+
 /* ---- string.h ---- */
 
 AFNI_COMPAT_API char *strcasestr(const char *haystack, const char *needle);
@@ -213,6 +218,7 @@ typedef void (*afni_compat_sighandler_t)(int);
 
 AFNI_COMPAT_API afni_compat_sighandler_t afni_compat_signal(int sig,
                                                             afni_compat_sighandler_t handler);
+AFNI_COMPAT_API int kill(pid_t pid, int sig);
 
 #ifdef __cplusplus
 }
