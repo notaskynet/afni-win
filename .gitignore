@@ -56,3 +56,7 @@ dkms.conf
 
 # upstream AFNI checkout
 /afni/
+
+# python
+.venv/
+__pycache__/
