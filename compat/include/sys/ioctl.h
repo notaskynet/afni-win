@@ -1,0 +1,4 @@
+#ifndef AFNI_COMPAT_SYS_IOCTL_H
+#define AFNI_COMPAT_SYS_IOCTL_H
+
+#endif

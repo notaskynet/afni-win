@@ -45,6 +45,8 @@
 extern "C" {
 #endif
 
+AFNI_COMPAT_API void afni_compat_runtime(void);
+
 typedef int uid_t;
 typedef int gid_t;
 typedef int key_t;
@@ -54,11 +56,19 @@ typedef int key_t;
 #define THD_MKDIR_MODE 0755
 #define DONT_USE_SHM
 #define DONT_USE_FORK
+#define READ_WRITE_64
+
+/* ---- winsock.h is blocked above; upstream _WIN32 code includes it only for these ---- */
+
+#if !defined(AFNI_COMPAT_BUILDING)
+typedef uintptr_t SOCKET;
+#define INVALID_SOCKET ((SOCKET)(~(uintptr_t)0))
+#endif
 
 /* ---- 64-bit file offsets: long is 32 bits on Windows ---- */
 
-#define fseek(stream, offset, whence) _fseeki64((stream), (offset), (whence))
-#define ftell(stream) _ftelli64(stream)
+#define fseek _fseeki64
+#define ftell _ftelli64
 
 /* ---- stdlib.h ---- */
 
@@ -125,6 +135,7 @@ AFNI_COMPAT_API uid_t getuid(void);
 AFNI_COMPAT_API uid_t geteuid(void);
 AFNI_COMPAT_API pid_t getppid(void);
 AFNI_COMPAT_API int fsync(int fd);
+AFNI_COMPAT_API int pause(void);
 AFNI_COMPAT_API int gethostname(char *name, size_t len);
 
 /* ---- fcntl.h ---- */
