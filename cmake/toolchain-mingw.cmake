@@ -1,0 +1,44 @@
+get_filename_component(AFNI_WIN_ROOT "${CMAKE_CURRENT_LIST_DIR}/.." REALPATH)
+set(AFNI_WIN_COMPAT_INCLUDE "${AFNI_WIN_ROOT}/compat/include")
+
+set(CMAKE_SYSTEM_NAME Windows)
+set(CMAKE_SYSTEM_PROCESSOR x86_64)
+
+if(CMAKE_HOST_WIN32)
+  set(CMAKE_C_COMPILER gcc)
+  set(CMAKE_CXX_COMPILER g++)
+  set(CMAKE_RC_COMPILER windres)
+else()
+  set(AFNI_WIN_TRIPLET "x86_64-w64-mingw32ucrt" CACHE STRING "Cross compiler prefix")
+  set(AFNI_WIN_SYSROOT "/usr/${AFNI_WIN_TRIPLET}/sys-root/mingw" CACHE PATH "Target sysroot")
+  set(CMAKE_C_COMPILER "${AFNI_WIN_TRIPLET}-gcc")
+  set(CMAKE_CXX_COMPILER "${AFNI_WIN_TRIPLET}-g++")
+  set(CMAKE_RC_COMPILER "${AFNI_WIN_TRIPLET}-windres")
+  set(CMAKE_FIND_ROOT_PATH "${AFNI_WIN_SYSROOT}")
+  set(CMAKE_FIND_ROOT_PATH_MODE_PROGRAM NEVER)
+  set(CMAKE_FIND_ROOT_PATH_MODE_LIBRARY ONLY)
+  set(CMAKE_FIND_ROOT_PATH_MODE_INCLUDE ONLY)
+  set(CMAKE_FIND_ROOT_PATH_MODE_PACKAGE ONLY)
+  find_program(AFNI_WIN_WINE wine)
+  if(AFNI_WIN_WINE)
+    set(CMAKE_CROSSCOMPILING_EMULATOR "${AFNI_WIN_WINE}")
+  endif()
+endif()
+
+execute_process(
+  COMMAND "${CMAKE_C_COMPILER}" -print-file-name=binmode.o
+  OUTPUT_VARIABLE AFNI_WIN_BINMODE_OBJECT
+  OUTPUT_STRIP_TRAILING_WHITESPACE
+)
+if(NOT EXISTS "${AFNI_WIN_BINMODE_OBJECT}")
+  message(FATAL_ERROR "binmode.o not found via ${CMAKE_C_COMPILER} -print-file-name")
+endif()
+
+set(_afni_win_compile "-I${AFNI_WIN_COMPAT_INCLUDE} -include ${AFNI_WIN_COMPAT_INCLUDE}/afni_compat.h")
+set(CMAKE_C_FLAGS_INIT "${_afni_win_compile}")
+set(CMAKE_CXX_FLAGS_INIT "${_afni_win_compile}")
+set(CMAKE_EXE_LINKER_FLAGS_INIT "${AFNI_WIN_BINMODE_OBJECT} -Wl,--wrap=alarm")
+set(CMAKE_SHARED_LINKER_FLAGS_INIT "-Wl,--wrap=alarm")
+set(CMAKE_MODULE_LINKER_FLAGS_INIT "-Wl,--wrap=alarm")
+
+set(CMAKE_PROJECT_AFNI_INCLUDE "${AFNI_WIN_ROOT}/cmake/afni-win-project.cmake")
