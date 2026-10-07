@@ -1,0 +1,8 @@
+# Operations that the layer accepts without doing anything, because doing nothing
+# does not change any result on Windows. Everything not listed here either works
+# or fails with an error and a stderr message.
+# Format: <operation> | <justification>
+signal(SIGPIPE, handler) | Windows never raises SIGPIPE; a failed write to a pipe or socket returns an error instead. Returns SIG_DFL (the disposition is and stays default).
+signal(SIGBUS, handler) | Windows never raises SIGBUS; misaligned or out-of-range memory access raises SIGSEGV (access violation). Returns SIG_DFL.
+mallopt(param, value) | Allocator hint only; UCRT malloc has no tunables. Will return 0 without a message. Not declared yet: the only upstream call (machdep.c) is under defined(LINUX), which the Windows build does not define.
+mkdir(path, mode) | NTFS has no POSIX permission bits; the directory is created with inherited ACLs. Only the mode argument is ignored.

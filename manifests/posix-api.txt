@@ -1,0 +1,41 @@
+# APIs implemented by the compat layer (real implementations).
+# Format: <function> <module> <notes>
+drand48 rand48.c POSIX 48-bit LCG, bit-identical to glibc
+erand48 rand48.c
+jrand48 rand48.c
+lcong48 rand48.c
+lrand48 rand48.c
+mrand48 rand48.c
+nrand48 rand48.c
+seed48 rand48.c
+srand48 rand48.c seed truncated to 32 bits as in glibc
+sysconf sysconf.c _SC_PAGESIZE _SC_NPROCESSORS_CONF _SC_NPROCESSORS_ONLN _SC_PHYS_PAGES _SC_AVPHYS_PAGES; other names fail with EINVAL
+getuid users.c always 0, consistent with st_uid reported by UCRT stat()
+geteuid users.c same as getuid
+getpwuid users.c only the current user (uid 0); pw_dir from USERPROFILE with forward slashes
+uname utsname.c sysname "Windows", release/version from RtlGetVersion
+gethostname utsname.c GetComputerNameEx(ComputerNameDnsHostname)
+readlink fs.c symbolic links and junctions; other files fail with EINVAL
+realpath fs.c GetFinalPathNameByHandle; result uses forward slashes
+lstat fs.c reports S_IFLNK for symbolic links and junctions
+mkdir fs.c two-argument form; mode is ignored (see noop-allowlist.txt)
+fsync fs.c _commit
+flock fs.c LockFileEx/UnlockFileEx on the whole file
+select time.c no descriptors: sleeps for the timeout; descriptors: ENOSYS (see enosys.txt)
+times time.c GetProcessTimes; children times accumulated by waitpid
+mmap mman.c file mappings (read-only, shared read-write, private copy-on-write) and anonymous mappings; any offset
+munmap mman.c whole regions only (page-rounded length); partial unmap fails with ENOSYS
+posix_spawn process.c CreateProcess; file actions and attributes fail with ENOSYS
+posix_spawnp process.c PATH lookup with optional .exe suffix
+waitpid process.c pid > 0 or -1; WNOHANG; other options and process groups fail with ENOSYS
+wait process.c waitpid(-1, status, 0)
+getppid process.c Toolhelp snapshot; may be 0 if the parent is not a Windows process
+signal signal.c SIGINT SIGILL SIGFPE SIGSEGV SIGTERM SIGBREAK SIGABRT via UCRT; SIGPIPE SIGBUS see noop-allowlist.txt; others SIG_ERR + ENOSYS
+inet_ntoa net.c
+htons net.c inline
+htonl net.c inline
+ntohs net.c inline
+ntohl net.c inline
+strcasestr string.c
+fseek afni_compat.h mapped to _fseeki64
+ftell afni_compat.h mapped to _ftelli64
