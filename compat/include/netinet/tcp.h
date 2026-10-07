@@ -1,0 +1,6 @@
+#ifndef AFNI_COMPAT_NETINET_TCP_H
+#define AFNI_COMPAT_NETINET_TCP_H
+
+#define TCP_NODELAY 0x0001
+
+#endif
