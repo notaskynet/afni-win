@@ -9,9 +9,9 @@ The build uses the MinGW-w64 toolchain (MSYS2, UCRT64 environment). POSIX functi
 ## 2. Key principles
 
 1. **Upstream is not modified and not stored in this repository.** AFNI sources are fetched by tag at build time. Committing AFNI code into `afni-win` is forbidden.
-2. **The layer is attached from outside:** replacement headers (first in the include path), forced include (`-include afni_compat.h`), a static library of implementations, runtime settings (binary file mode by default).
+2. **The layer is attached from outside:** replacement headers (first in the include path), forced include (`-include afni_compat.h`), a library of implementations (`afni_compat.dll`, see `docs/DECISIONS.md` D5a), runtime settings (binary file mode by default).
 3. **Patches are the last resort.** A patch is allowed only for what the layer cannot cover (e.g. `fork()` without `exec`). Each patch has a header explaining why the layer is not suitable.
-4. **No silent stubs.** A function the layer does not support must not be declared in replacement headers, so that its use causes a compile or link error. If a partial implementation is unavoidable, unsupported cases return an error (`errno = ENOSYS` etc.) and print a message to stderr. Returning "success" without performing the action is forbidden.
+4. **No silent stubs.** A function the layer does not support must not be declared in replacement headers, so that its use causes a compile or link error. If a partial implementation is unavoidable, unsupported cases return an error (`errno = ENOSYS` etc.) and print a message to stderr. Returning "success" without performing the action is forbidden. The only exception is a no-op whose absence of action cannot change any result (e.g. a handler for a signal Windows never raises); each such case is listed with a justification in `manifests/noop-allowlist.txt`. Functions that are declared but not yet implemented are listed in `manifests/enosys.txt`.
 5. **Do not invent anything about upstream.** Before any decision about building AFNI, study the actual upstream code and build system. If something is unclear, stop and ask.
 
 ## 3. Repository layout
@@ -24,7 +24,9 @@ afni-win/
 │   └── tests/              # layer unit tests
 ├── patches/                # 0001-*.patch, applied via git apply --3way
 ├── cmake/
-│   └── toolchain-mingw.cmake
+│   ├── toolchain-mingw.cmake
+│   ├── afni-win-project.cmake   # hook: adds the compat layer to the upstream project
+│   └── gifti/                   # builds the in-tree gifti library
 ├── manifests/
 │   ├── programs-required.txt
 │   ├── programs-optional.txt
