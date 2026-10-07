@@ -22,6 +22,7 @@ endif()
 add_library(
   afni_compat SHARED
   src/fs.c
+  src/init.c
   src/mman.c
   src/net.c
   src/process.c
@@ -52,6 +53,11 @@ target_include_directories(
 target_compile_definitions(afni_compat PRIVATE AFNI_COMPAT_BUILDING)
 target_compile_options(afni_compat PRIVATE "SHELL:-include \"${AFNI_COMPAT_HEADER}\"" ${AFNI_COMPAT_WARNINGS})
 target_link_libraries(afni_compat PRIVATE advapi32)
+target_link_options(afni_compat INTERFACE "LINKER:--require-defined=afni_compat_runtime")
+
+add_library(afni_compat_binmode STATIC src/binmode.c)
+set_target_properties(afni_compat_binmode PROPERTIES C_STANDARD 11 C_EXTENSIONS OFF)
+target_link_libraries(afni_compat INTERFACE "$<LINK_ONLY:afni_compat_binmode>")
 
 install(TARGETS afni_compat RUNTIME DESTINATION bin LIBRARY DESTINATION lib ARCHIVE DESTINATION lib)
 
@@ -62,7 +68,7 @@ if(AFNI_COMPAT_TESTS)
   target_compile_options(compat_test_child PRIVATE "SHELL:-include \"${AFNI_COMPAT_HEADER}\"" ${AFNI_COMPAT_WARNINGS})
   target_link_libraries(compat_test_child PRIVATE afni_compat)
 
-  foreach(name fs mman net process rand48 shell signal string sysinfo time users)
+  foreach(name fs init mman net process rand48 shell signal string sysinfo time users)
     add_executable(test_${name} tests/test_${name}.c)
     set_target_properties(test_${name} PROPERTIES C_STANDARD 11 C_STANDARD_REQUIRED ON C_EXTENSIONS OFF)
     target_compile_options(test_${name} PRIVATE "SHELL:-include \"${AFNI_COMPAT_HEADER}\"" ${AFNI_COMPAT_WARNINGS})
