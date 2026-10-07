@@ -11,6 +11,10 @@
 
 #define MAX_CHILDREN 256
 
+/* Exit code given to TerminateProcess by kill(); waitpid() reports such a
+   child as terminated by the signal. */
+#define KILLED_BY_SIGNAL 0xAF100000u
+
 typedef struct {
   pid_t pid;
   HANDLE process;
@@ -240,7 +244,23 @@ int posix_spawnp(pid_t *pid, const char *file, const posix_spawn_file_actions_t 
   return spawn(pid, file, 1, file_actions, attrp, argv, envp);
 }
 
+int afni_compat_add_child(pid_t pid, HANDLE process) {
+  AcquireSRWLockExclusive(&children_lock);
+  if (children_count == MAX_CHILDREN) {
+    ReleaseSRWLockExclusive(&children_lock);
+    return EAGAIN;
+  }
+  children[children_count].pid = pid;
+  children[children_count].process = process;
+  ++children_count;
+  ReleaseSRWLockExclusive(&children_lock);
+  return 0;
+}
+
 int afni_compat_wait_status(DWORD code) {
+  if ((code & 0xFFFFFF00u) == KILLED_BY_SIGNAL && (code & 0xFFu) != 0) {
+    return (int)(code & 0x7Fu);
+  }
   switch (code) {
     case 0xC0000005u:
     case 0xC00000FDu:
@@ -305,12 +325,58 @@ void afni_compat_children_times(clock_t *user, clock_t *system_time) {
   ReleaseSRWLockShared(&children_lock);
 }
 
+static int collect_children(pid_t pid, HANDLE **handles, pid_t **pids) {
+  int count = 0;
+  AcquireSRWLockShared(&children_lock);
+  *handles = (HANDLE *)malloc(sizeof(HANDLE) * (children_count > 0 ? children_count : 1));
+  *pids = (pid_t *)malloc(sizeof(pid_t) * (children_count > 0 ? children_count : 1));
+  if (*handles == NULL || *pids == NULL) {
+    ReleaseSRWLockShared(&children_lock);
+    free(*handles);
+    free(*pids);
+    return -1;
+  }
+  for (int i = 0; i < children_count; ++i) {
+    if (pid == -1 || children[i].pid == pid) {
+      (*handles)[count] = children[i].process;
+      (*pids)[count] = children[i].pid;
+      ++count;
+    }
+  }
+  ReleaseSRWLockShared(&children_lock);
+  return count;
+}
+
+/* Index of a finished child among handles[0..count), -1 if none finished
+   within timeout, -2 on error. More than MAXIMUM_WAIT_OBJECTS children are
+   polled in groups. */
+static int wait_any(HANDLE *handles, int count, DWORD timeout) {
+  for (;;) {
+    for (int first = 0; first < count; first += MAXIMUM_WAIT_OBJECTS) {
+      DWORD group = (DWORD)(count - first < MAXIMUM_WAIT_OBJECTS ? count - first
+                                                                 : MAXIMUM_WAIT_OBJECTS);
+      DWORD wait_time = count <= MAXIMUM_WAIT_OBJECTS ? timeout : 0;
+      DWORD result = WaitForMultipleObjects(group, handles + first, FALSE, wait_time);
+      if (result < WAIT_OBJECT_0 + group) {
+        return first + (int)(result - WAIT_OBJECT_0);
+      }
+      if (result != WAIT_TIMEOUT) {
+        return -2;
+      }
+    }
+    if (timeout == 0 || count <= MAXIMUM_WAIT_OBJECTS) {
+      return -1;
+    }
+    Sleep(10);
+  }
+}
+
 pid_t waitpid(pid_t pid, int *status, int options) {
-  HANDLE handles[MAXIMUM_WAIT_OBJECTS];
-  pid_t pids[MAXIMUM_WAIT_OBJECTS];
-  DWORD timeout = (options & WNOHANG) ? 0 : INFINITE;
-  DWORD count = 0;
-  DWORD result;
+  HANDLE *handles;
+  pid_t *pids;
+  pid_t found;
+  int count;
+  int index;
 
   if ((options & ~WNOHANG) != 0) {
     AFNI_COMPAT_UNSUPPORTED("options other than WNOHANG");
@@ -320,41 +386,41 @@ pid_t waitpid(pid_t pid, int *status, int options) {
     AFNI_COMPAT_UNSUPPORTED("process groups");
     return -1;
   }
-  AcquireSRWLockShared(&children_lock);
-  for (int i = 0; i < children_count; ++i) {
-    if (pid == -1 || children[i].pid == pid) {
-      if (count == MAXIMUM_WAIT_OBJECTS) {
-        ReleaseSRWLockShared(&children_lock);
-        AFNI_COMPAT_UNSUPPORTED("waiting for more than 64 children at once");
-        return -1;
-      }
-      handles[count] = children[i].process;
-      pids[count] = children[i].pid;
-      ++count;
-    }
+  count = collect_children(pid, &handles, &pids);
+  if (count < 0) {
+    errno = ENOMEM;
+    return -1;
   }
-  ReleaseSRWLockShared(&children_lock);
   if (count == 0) {
+    free(handles);
+    free(pids);
     errno = ECHILD;
     return -1;
   }
-  result = WaitForMultipleObjects(count, handles, FALSE, timeout);
-  if (result == WAIT_TIMEOUT) {
+  index = wait_any(handles, count, (options & WNOHANG) ? 0 : INFINITE);
+  if (index == -1) {
+    free(handles);
+    free(pids);
     return 0;
   }
-  if (result >= WAIT_OBJECT_0 + count) {
+  if (index == -2) {
     afni_compat_set_errno_from_win32(GetLastError());
+    free(handles);
+    free(pids);
     return -1;
   }
+  found = pids[index];
+  free(handles);
+  free(pids);
   AcquireSRWLockExclusive(&children_lock);
   for (int i = 0; i < children_count; ++i) {
-    if (children[i].pid == pids[result - WAIT_OBJECT_0]) {
+    if (children[i].pid == found) {
       reap(i, status);
       break;
     }
   }
   ReleaseSRWLockExclusive(&children_lock);
-  return pids[result - WAIT_OBJECT_0];
+  return found;
 }
 
 pid_t wait(int *status) {
@@ -382,4 +448,33 @@ pid_t getppid(void) {
   CloseHandle(snapshot);
   errno = ESRCH;
   return -1;
+}
+
+int kill(pid_t pid, int sig) {
+  HANDLE process;
+  DWORD error;
+
+  if (pid <= 0) {
+    AFNI_COMPAT_UNSUPPORTED("process groups");
+    return -1;
+  }
+  if (sig != 0 && sig != SIGTERM && sig != SIGKILL) {
+    AFNI_COMPAT_UNSUPPORTED("only SIGTERM, SIGKILL and 0 can be sent");
+    return -1;
+  }
+  process = OpenProcess(sig == 0 ? PROCESS_QUERY_LIMITED_INFORMATION : PROCESS_TERMINATE, FALSE,
+                        (DWORD)pid);
+  if (process == NULL) {
+    error = GetLastError();
+    errno = error == ERROR_INVALID_PARAMETER ? ESRCH : EPERM;
+    return -1;
+  }
+  if (sig != 0 && !TerminateProcess(process, KILLED_BY_SIGNAL | (DWORD)sig)) {
+    error = GetLastError();
+    CloseHandle(process);
+    errno = error == ERROR_ACCESS_DENIED ? EPERM : ESRCH;
+    return -1;
+  }
+  CloseHandle(process);
+  return 0;
 }

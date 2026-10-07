@@ -101,7 +101,7 @@ static HANDLE std_handle(int fd, DWORD which) {
 /* Starts "<shell> -c command" (or "busybox sh -c command") with the given
    standard handles; only these handles are inherited by the child. */
 static int start_shell(const char *function, const char *command, HANDLE in, HANDLE out,
-                       HANDLE err, HANDLE *process) {
+                       HANDLE err, HANDLE *process, DWORD *pid) {
   char shell[MAX_PATH];
   char *argv[5];
   char *command_line;
@@ -171,6 +171,9 @@ static int start_shell(const char *function, const char *command, HANDLE in, HAN
   }
   CloseHandle(info.hThread);
   *process = info.hProcess;
+  if (pid != NULL) {
+    *pid = info.dwProcessId;
+  }
   result = 0;
 
 done:
@@ -217,7 +220,7 @@ FILE *afni_compat_popen(const char *command, const char *mode) {
   }
   if (start_shell("popen", command, reading ? std_handle(0, STD_INPUT_HANDLE) : read_end,
                   reading ? write_end : std_handle(1, STD_OUTPUT_HANDLE),
-                  std_handle(2, STD_ERROR_HANDLE), &process) != 0) {
+                  std_handle(2, STD_ERROR_HANDLE), &process, NULL) != 0) {
     int saved = errno;
     CloseHandle(read_end);
     CloseHandle(write_end);
@@ -287,8 +290,33 @@ int afni_compat_system(const char *command) {
   }
   if (start_shell("system", command, std_handle(0, STD_INPUT_HANDLE),
                   std_handle(1, STD_OUTPUT_HANDLE), std_handle(2, STD_ERROR_HANDLE),
-                  &process) != 0) {
+                  &process, NULL) != 0) {
     return -1;
   }
   return wait_process(process);
+}
+
+int afni_compat_spawn_shell(pid_t *pid, const char *command) {
+  HANDLE process;
+  DWORD id;
+  int error;
+
+  if (command == NULL) {
+    return EINVAL;
+  }
+  if (start_shell("afni_compat_spawn_shell", command, std_handle(0, STD_INPUT_HANDLE),
+                  std_handle(1, STD_OUTPUT_HANDLE), std_handle(2, STD_ERROR_HANDLE), &process,
+                  &id) != 0) {
+    return errno;
+  }
+  error = afni_compat_add_child((pid_t)id, process);
+  if (error != 0) {
+    TerminateProcess(process, 1);
+    CloseHandle(process);
+    return error;
+  }
+  if (pid != NULL) {
+    *pid = (pid_t)id;
+  }
+  return 0;
 }
