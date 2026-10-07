@@ -87,7 +87,7 @@ static int append_quoted_argument(buffer *out, const char *arg) {
   return buffer_append(out, "\"", 1);
 }
 
-static char *build_command_line(char *const argv[]) {
+char *afni_compat_command_line(char *const argv[]) {
   buffer out = {NULL, 0, 0};
   for (int i = 0; argv[i] != NULL; ++i) {
     if ((i > 0 && buffer_append(&out, " ", 1) != 0) || append_quoted_argument(&out, argv[i]) != 0) {
@@ -184,7 +184,7 @@ static int spawn(pid_t *pid, const char *file, int search_path,
   if (error != 0) {
     return error;
   }
-  command_line = build_command_line(argv);
+  command_line = afni_compat_command_line(argv);
   if (command_line == NULL) {
     return ENOMEM;
   }
@@ -240,7 +240,7 @@ int posix_spawnp(pid_t *pid, const char *file, const posix_spawn_file_actions_t 
   return spawn(pid, file, 1, file_actions, attrp, argv, envp);
 }
 
-static int encode_status(DWORD code) {
+int afni_compat_wait_status(DWORD code) {
   switch (code) {
     case 0xC0000005u:
     case 0xC00000FDu:
@@ -294,7 +294,7 @@ static void reap(int index, int *status) {
   children[index] = children[children_count - 1];
   --children_count;
   if (status != NULL) {
-    *status = encode_status(code);
+    *status = afni_compat_wait_status(code);
   }
 }
 
