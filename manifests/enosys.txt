@@ -1,22 +1,7 @@
 # Functions declared by the compat layer that currently fail with errno = ENOSYS
 # and print a message to stderr (once per function). This list must shrink.
 # Format: <function> <module> <reason / planned resolution>
-popen shell.c phase 2: run through busybox-w32 sh
-pclose shell.c phase 2: run through busybox-w32 sh
-system shell.c phase 2: run through busybox-w32 sh; system(NULL) returns 0 (no shell)
-socket net.c phase 2: Winsock
-bind net.c phase 2: Winsock
-listen net.c phase 2: Winsock
-accept net.c phase 2: Winsock
-connect net.c phase 2: Winsock
-send net.c phase 2: Winsock
-recv net.c phase 2: Winsock
-setsockopt net.c phase 2: Winsock
-getsockopt net.c phase 2: Winsock
-shutdown net.c phase 2: Winsock
-gethostbyname net.c phase 2: Winsock
-gethostbyaddr net.c phase 2: Winsock
-select time.c waiting on descriptors; phase 2 together with sockets
-fcntl fs.c only used on sockets (O_NONBLOCK, F_SETOWN); phase 2 together with sockets
-setitimer time.c asynchronous signals do not exist on Windows; only caller THD_death_setup (thd_vcheck.c)
+setitimer time.c asynchronous signals do not exist on Windows; the only caller THD_death_setup (thd_vcheck.c) is called only from code that is compiled out (thd_vcheck.c:127) or GUI-only (afni_version.c)
 pause signal.c asynchronous signals do not exist on Windows; only caller is the f2c runtime (Fortran PAUSE)
+fcntl net.c F_GETFL/F_SETFL on descriptors that are not sockets (upstream uses fcntl only on sockets)
+select net.c waiting on descriptors that are not sockets (upstream waits only on sockets)
