@@ -47,7 +47,6 @@
 1dtranspose
 ccalc
 cat_matvec
-whereami
 3dAttribute
 3dSynthesize
 3dNotes

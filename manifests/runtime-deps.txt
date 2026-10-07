@@ -1,0 +1,14 @@
+# Files that must ship next to the afni-win binaries at run time.
+# Versions are the ones current on 2026-10-08; the build report of each
+# release records the exact versions that were packaged.
+# Format: <file> | <source> | <version> | <license> | <needed by>
+afni_compat.dll | afni-win (this repository) | built per release | GPL-3.0-or-later | every program
+libmri.dll and other AFNI DLLs | upstream AFNI tag | upstream tag | Public domain (US Government work) with third-party exceptions listed in upstream LICENSE.txt | AFNI programs
+libgomp-1.dll | MSYS2 mingw-w64-ucrt-x86_64-gcc-libs | 16.2.0-4 | GPL-3.0 with GCC Runtime Library Exception | OpenMP programs
+libgcc_s_seh-1.dll | MSYS2 mingw-w64-ucrt-x86_64-gcc-libs | 16.2.0-4 | GPL-3.0 with GCC Runtime Library Exception | libgomp-1.dll
+libwinpthread-1.dll | MSYS2 mingw-w64-ucrt-x86_64-libwinpthread | 14.0.0.r426.g4564ee4b5-1 | MIT and BSD-3-Clause | libgomp-1.dll
+zlib1.dll | MSYS2 mingw-w64-ucrt-x86_64-zlib | 1.3.2-2 | Zlib | libmri.dll, NIfTI and GIFTI libraries
+libexpat-1.dll | MSYS2 mingw-w64-ucrt-x86_64-expat | 2.8.5-1 | MIT | libgiftiio.dll
+busybox64u.exe | busybox-w32, https://frippery.org/files/busybox/busybox64u.exe | 1.38.0 (FRP-6075-g169694ebd), sha256 6e263d154d8548d1eb936f65d1d8312c80df31c45974e48d6335e4dcc0f4f34c | GPL-2.0-only | sh for popen()/system(); gzip/bzip2 applets for compressed .BRIK
+qhull.exe | MSYS2 mingw-w64-ucrt-x86_64-qhull (not upstream src/qhulldir, which fails on Win64: ptr_intT is long) | 2020.2-3 | Qhull licence (BSD-like) | cs_qhull.c via popen("qhull ...")
+AFNI_atlas_spaces.niml | upstream AFNI tag, src/AFNI_atlas_spaces.niml | upstream tag | AFNI | whereami and atlas functions; atlas datasets themselves are NOT shipped until their licences are checked
