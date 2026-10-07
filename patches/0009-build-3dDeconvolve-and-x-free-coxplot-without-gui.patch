@@ -1,0 +1,177 @@
+From: afni-win
+Subject: [PATCH] build 3dDeconvolve and an X-free coxplot without the GUI
+
+Why the compat layer cannot handle this: upstream CMake defines
+3dDeconvolve (and the coxplot library it uses) only inside if(COMP_GUI),
+which needs X11 and Motif, and coxplot.h includes <X11/Intrinsic.h>
+unconditionally. 3dDeconvolve itself calls no X11 function: it uses only
+the in-memory plotting of coxplot and memplot_to_RGB_sef() from
+mri_coxplot.c (-xjpeg). Build files and a header that names X11 types are
+outside the reach of a replacement header or library. With COMP_GUI off the
+patch builds coxplot without Motif, defines COXPLOT_WITHOUT_X11 for its
+users (coxplot.h then leaves out the declarations that need X11 types), and
+defines 3dDeconvolve with mri_coxplot.c. With COMP_GUI on nothing changes.
+
+diff --git a/src/CMakeLists.txt b/src/CMakeLists.txt
+index 5ab7e63..cd18419 100644
+--- a/src/CMakeLists.txt
++++ b/src/CMakeLists.txt
+@@ -119,6 +119,9 @@ if(COMP_GUI)
+   add_subdirectory(coxplot)
+   include(CMakeLists_x_dependent.txt)
+   set(PROGRAMS_BUILT mrix)
++else()
++  # afni-win: X-free coxplot, used by 3dDeconvolve (CMakeLists_binaries.txt)
++  add_subdirectory(coxplot)
+ endif()
+ 
+ # Add suma
+diff --git a/src/CMakeLists_binaries.txt b/src/CMakeLists_binaries.txt
+index 81d394a..9545fc0 100644
+--- a/src/CMakeLists_binaries.txt
++++ b/src/CMakeLists_binaries.txt
+@@ -543,4 +543,9 @@ if(COMP_GUI)
+   )
+ 
+ 
++else()
++  # afni-win: 3dDeconvolve uses only the in-memory plotting of coxplot and
++  # memplot_to_RGB_sef() from mri_coxplot.c, so it builds without X11.
++  add_afni_executable(3dDeconvolve $<TARGET_OBJECTS:parser> 3dDeconvolve.c mri_coxplot.c)
++  target_link_libraries(3dDeconvolve PRIVATE AFNI::coxplot AFNI::mri f2c NIFTI::nifticdf m)
+ endif()
+diff --git a/src/coxplot/CMakeLists.txt b/src/coxplot/CMakeLists.txt
+index 0026271..40b3ddd 100644
+--- a/src/coxplot/CMakeLists.txt
++++ b/src/coxplot/CMakeLists.txt
+@@ -50,7 +50,13 @@ add_afni_library(
+ )
+ 
+ set_target_properties(coxplot PROPERTIES PUBLIC_HEADER "coxplot.h")
+-target_link_libraries(coxplot PRIVATE AFNI::mri Motif::Motif f2c m)
++if(COMP_GUI)
++  target_link_libraries(coxplot PRIVATE AFNI::mri Motif::Motif f2c m)
++else()
++  # afni-win: X-free coxplot for 3dDeconvolve without the GUI
++  target_link_libraries(coxplot PRIVATE AFNI::mri f2c m)
++  target_compile_definitions(coxplot PUBLIC COXPLOT_WITHOUT_X11)
++endif()
+ target_include_directories(
+   coxplot INTERFACE $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
+                   $<INSTALL_INTERFACE:${AFNI_INSTALL_INCLUDE_DIR}>
+diff --git a/src/coxplot/coxplot.h b/src/coxplot/coxplot.h
+index f5af091..7da76f7 100644
+--- a/src/coxplot/coxplot.h
++++ b/src/coxplot/coxplot.h
+@@ -9,13 +9,18 @@
+ 
+ /*---------------- Header for in-memory adaptation of PLOTPAK ---------------*/
+ 
++/* COXPLOT_WITHOUT_X11: only the in-memory, PostScript and image routines
++   are declared, so programs such as 3dDeconvolve build without X11
++   headers. [afni-win] */
++#ifndef COXPLOT_WITHOUT_X11
+ #include <X11/Intrinsic.h>
++#endif
+ #include <string.h>
+ #include <stdio.h>
+ #include <math.h>
+ #include <stdlib.h>
+ #include "mrilib.h"
+-#ifdef HAVE_XDBE
++#if defined(HAVE_XDBE) && !defined(COXPLOT_WITHOUT_X11)
+ #  include <X11/extensions/Xdbe.h>
+ 
+ #  ifdef MAIN_COXPLOT_FILE
+@@ -237,7 +242,9 @@ extern void memplot_to_postscript( char * , MEM_plotdata * ) ;
+ extern unsigned long rgb_to_pixel( unsigned char , unsigned char ,
+                                    unsigned char , X11_colordef * ) ;
+ 
++#ifndef COXPLOT_WITHOUT_X11
+ extern X11_colordef * get_X11_colordef( Display * , Window ) ;
++#endif
+ 
+ #define MEMPLOT_FREE_ASPECT 1  /* masks for memplot_to_X11_sef() */
+ #define MEMPLOT_ERASE       2
+@@ -245,19 +252,25 @@ extern X11_colordef * get_X11_colordef( Display * , Window ) ;
+ void memplot_XDrawLines_set_substitute( void (*msf)() ) ;  /* 30 Aug 2021 */
+ void * memplot_XDrawLines_get_substitute(void) ;
+ 
++#ifndef COXPLOT_WITHOUT_X11
+ extern void memplot_to_X11_sef( Display * , Window ,
+                                 MEM_plotdata * , int,int,int ) ;
++#endif
+ 
+ extern void   memplot_to_X11_set_substitute( void (*msf)() ) ;  /* 30 Apr 2012 */
+ extern void * memplot_to_X11_get_substitute( void ) ;
+ 
++#ifndef COXPLOT_WITHOUT_X11
+ extern void drawable_geom( Display *dpy , Drawable ddd ,      /* 30 Apr 2012 */
+                            int *width , int *height , int *depth ) ;
++#endif
+ 
+ extern void set_memplot_X11_box( int,int,int,int ) ;  /* 26 Feb 2001 */
+ 
++#ifndef COXPLOT_WITHOUT_X11
+ extern void set_X11_background( Display * , Window ,
+                                 unsigned char , unsigned char , unsigned char ) ;
++#endif
+ 
+ extern void set_memplot_X11_rectfill( int ) ;  /* 26 Oct 2005 */
+ 
+@@ -281,6 +294,7 @@ extern void memplot_to_pnm( char * , MEM_plotdata * ) ; /* 06 Jan 2015 */
+ extern void memplot_to_mri_set_dothick( int ) ;         /* 30 Apr 2012 */
+ extern void memplot_to_mri_set_dofreee( int ) ;         /* 30 Apr 2012 */
+ 
++#ifndef COXPLOT_WITHOUT_X11
+ typedef struct {
+    Widget top , dial , wtf , drawing , form, clonebut ;
+    int valid ;
+@@ -315,6 +329,7 @@ extern void memplot_topshell_setsaver( char * ,
+                                        void (*)(char *,MEM_plotdata *) ) ;
+ 
+ #define memplot_to_shell(d) memplot_to_topshell( (d),get_active_memplot(),1 )
++#endif /* COXPLOT_WITHOUT_X11 */
+ 
+ /*-- plot time series --*/
+ 
+@@ -354,13 +369,16 @@ extern void plot_ts_setthik( float thk ) ;                         /* 02 May 201
+ #define plot_ts_sethick  plot_ts_setthik
+ extern void plot_ts_setthik_12( int n1, int n2, float thk ) ;      /* 04 Mar 2013 */
+ 
++#ifndef COXPLOT_WITHOUT_X11
+ extern void plot_ts_lab( Display *,
+                          int,float *, int,float **,
+                          char *,char *,char *,char ** , void_func * ) ;
++#endif
+ 
+ extern MEM_plotdata * plot_ts_ebar( int nx , float *x , float *y , float *ey ,
+                                     char *lab_xxx , char *lab_yyy , char *lab_top ) ;
+ 
++#ifndef COXPLOT_WITHOUT_X11
+ extern void plot_ts_ebar_win( Display *,
+                               int,float *,float *,float *,char *,char *,char *,
+                               void_func * ) ;
+@@ -372,12 +390,14 @@ extern MEM_topshell_data * plot_ts_init( Display *, float, float,
+                                          char *, char *, char *, char ** , void_func * ) ;
+ 
+ extern void plot_ts_addto( MEM_topshell_data *, int,float *, int,float ** ) ;
++#endif
+ 
+ extern MEM_plotdata * plot_ts_mem( int,float *, int,int,float **,
+                                    char *,char *,char *,char ** ) ;
+ 
+ /*-- 15 Nov 2001: routines for strip plot --*/
+ 
++#ifndef COXPLOT_WITHOUT_X11
+ extern MEM_topshell_data * plot_strip_init( Display * , int , float ,
+                                             int , float , float ,
+                                             char * , char * ,
+@@ -386,6 +406,7 @@ extern MEM_topshell_data * plot_strip_init( Display * , int , float ,
+ extern void plot_strip_addto( MEM_topshell_data * , int , float ** ) ;
+ 
+ extern void plot_strip_clear( MEM_topshell_data * ) ;
++#endif
+ 
+ /*-- routines in this library that will be called from PLOTPAK --*/
+ 
