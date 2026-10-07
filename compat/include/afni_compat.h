@@ -152,8 +152,14 @@ AFNI_COMPAT_API int gethostname(char *name, size_t len);
 
 AFNI_COMPAT_API int fcntl(int fd, int cmd, ...);
 
-/* close() that also closes sockets (see sys/socket.h) */
+/* close() that also closes sockets (see sys/socket.h). Consumers declare it
+   without dllimport (the import library thunk is used), because upstream
+   f2c/rawio.h redeclares close() itself. */
+#if defined(AFNI_COMPAT_BUILDING)
 AFNI_COMPAT_API int afni_compat_close(int fd);
+#else
+int afni_compat_close(int fd);
+#endif
 
 /* ---- sys/file.h ---- */
 
