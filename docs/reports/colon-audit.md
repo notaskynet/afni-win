@@ -1,6 +1,6 @@
 # Audit: parsing of file names and variables at `:` (decision D14)
 
-Upstream `AFNI_26.2.09`. Scope: `libmri` and the console programs in `manifests/programs-required.txt` and `programs-optional.txt` (GUI and SUMA excluded, except `suma_*.c` files that are part of `libmri`). No patch has been made yet.
+Upstream `AFNI_26.2.09`. Scope: `libmri` and the console programs in `manifests/programs-required.txt` and `programs-optional.txt` (GUI and SUMA excluded, except `suma_*.c` files that are part of `libmri`). Patch: `patches/0007` (section 7).
 
 ## 1. Method
 
@@ -79,3 +79,13 @@ Other `:` uses are not file names: sub-brick ranges `[a:b]` (`thd_intlist.c:367,
 1. Confirm the D14 patch scope: the 9 sites in section 2, separator macro `;` under `_WIN32`.
 2. Absolute paths (5.1): add a second macro to the same patch, e.g. `THD_IS_ABSPATH(p)` = `p[0]=='/'` or, under `_WIN32`, a drive letter followed by `:` and `/` or `\`. Without it, `-prefix C:/…` does not work in most programs.
 3. Backslashes (5.2): (a) document that paths must use `/` (Windows accepts `C:/…` everywhere); (b) convert `\` to `/` in the layer, e.g. in `argv` at program start — this changes every argument, including expressions, and is not recommended; (c) patch every place that splits at `/` — many call sites, large patch. Recommendation: (a).
+
+## 7. Decisions taken
+
+1. D14 confirmed: the 9 sites in section 2 split at `THD_PATH_LIST_SEP` (`;` under `_WIN32`).
+2. `THD_IS_ABSPATH()` added to the same patch and used at the 8 sites in section 5.1 (`thd_initdkptr.c:43`, `thd_loaddblk.c:648`, `thd_getpathprogs.c:221`, `3dttest++.c:3708`, `1dTrdm.c:305`, `3dRSA.c:3004,3068`, `suma_utils.c:1183`).
+3. Backslashes (D20): option (a), paths must use `/`.
+
+Checks of `patches/0007`: patches 0001-0007 apply in order to `AFNI_26.2.09` with `git apply --3way`; the patched tree builds on Linux (`libmri`, `3dcalc`, `3dinfo`, `3dTstat`, `3dttest++`, `3dRSA`, `1dTrdm`) without new warnings and the smoke scenario passes; the `_WIN32` and non-`_WIN32` forms of the macros were tested separately. `NLfit_model.c` is not part of the upstream CMake build (it needs X11 headers), so its one-line change is not compiled. Not yet checked on Windows.
+
+Remaining finding, not covered by the patch: `SUMA_ParseFname` (`suma_utils.c:1070,1077`) rejects a working directory that does not start with `/`. On Windows `getcwd()` returns `C:\...`, so the function returns `NULL` when called without an explicit working directory.
