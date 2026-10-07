@@ -97,7 +97,20 @@ def fetch(config: BuildConfig) -> Path:
         logger.info("Using existing upstream tree %s", source)
         return source
     source.parent.mkdir(parents=True, exist_ok=True)
-    _run(["git", "clone", "--depth", "1", "--branch", config.tag, config.upstream_url, str(source)])
+    _run(
+        [
+            "git",
+            "-c",
+            "core.autocrlf=false",
+            "clone",
+            "--depth",
+            "1",
+            "--branch",
+            config.tag,
+            config.upstream_url,
+            str(source),
+        ]
+    )
     return source
 
 
