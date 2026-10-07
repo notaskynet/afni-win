@@ -31,3 +31,8 @@ afni_compat_sighandler_t afni_compat_signal(int sig, afni_compat_sighandler_t ha
   errno = ENOSYS;
   return SIG_ERR;
 }
+
+int pause(void) {
+  AFNI_COMPAT_UNSUPPORTED("there are no asynchronous signals to wait for");
+  return -1;
+}
