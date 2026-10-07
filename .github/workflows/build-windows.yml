@@ -83,7 +83,7 @@ jobs:
         with:
           msystem: UCRT64
           update: true
-          install: git
+          install: git make
           pacboy: >-
             gcc:p cmake:p ninja:p zlib:p expat:p qhull:p
             python:p python-pydantic:p
