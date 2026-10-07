@@ -19,3 +19,4 @@ gethostbyaddr net.c phase 2: Winsock
 select time.c waiting on descriptors; phase 2 together with sockets
 fcntl fs.c only used on sockets (O_NONBLOCK, F_SETOWN); phase 2 together with sockets
 setitimer time.c asynchronous signals do not exist on Windows; only caller THD_death_setup (thd_vcheck.c)
+pause signal.c asynchronous signals do not exist on Windows; only caller is the f2c runtime (Fortran PAUSE)
