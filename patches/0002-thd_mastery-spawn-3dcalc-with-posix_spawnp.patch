@@ -1,0 +1,51 @@
+From: afni-win
+Subject: [PATCH] thd_mastery: start 3dcalc with posix_spawnp instead of fork+execvp
+
+Why the compat layer cannot handle this: fork() returns twice (in the parent
+and in the child). A library on Windows cannot create a copy of the running
+process, so fork() is not provided by the layer at all, and every call site
+must be changed. This site only runs 3dcalc and waits for it, which is exactly
+what posix_spawnp()+waitpid() do; the layer implements both with
+CreateProcess/WaitForSingleObject. The change is POSIX and also works on
+Linux and macOS.
+
+diff --git a/src/thd_mastery.c b/src/thd_mastery.c
+index 9c0a7b0..767ab28 100644
+--- a/src/thd_mastery.c
++++ b/src/thd_mastery.c
+@@ -479,6 +479,8 @@ ENTRY("THD_setup_mastery") ;
+ 
+ #include <sys/types.h>
+ #include <sys/wait.h>
++#include <spawn.h>
++#include <errno.h>
+ 
+ static THD_3dim_dataset * THD_open_3dcalc( char *pname )
+ {
+@@ -553,22 +555,15 @@ ENTRY("THD_open_3dcalc") ;
+    fprintf(stderr,"\n") ;
+ #endif
+ 
+-   child_pid = fork() ;
++   ii = posix_spawnp( &child_pid , "3dcalc" , NULL , NULL , newArgv , environ ) ;
+ 
+-   if( child_pid == (pid_t)(-1) ){
+-     perror("*** Can't fork 3dcalc()") ;
++   if( ii != 0 ){
++     errno = ii ;
++     perror("*** Can't spawn 3dcalc()") ;
+      for( ii=0 ; ii < newArgc-1 ; ii++ ) free(newArgv[ii]) ;
+      free(newArgv) ; RETURN(NULL) ;
+    }
+ 
+-   if( child_pid == 0 ){  /*-- I'm the child --*/
+-
+-     execvp( "3dcalc" , newArgv ) ;        /* should not return */
+-     perror("*** Can't execvp 3dcalc()") ;
+-     _exit(1) ;
+-
+-   }
+-
+    /*-- I'm the parent --*/
+ 
+    STATUS("Waiting for 3dcalc() process to run") ;

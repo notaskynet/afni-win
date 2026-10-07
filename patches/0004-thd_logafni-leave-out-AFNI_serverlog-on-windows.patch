@@ -1,0 +1,40 @@
+From: afni-win
+Subject: [PATCH] thd_logafni: leave out AFNI_serverlog on Windows
+
+Why the compat layer cannot handle this: AFNI_serverlog() calls fork() and
+keeps running AFNI code (an HTTP request) in the child without exec. Windows
+cannot duplicate a running process, and the layer deliberately does not
+declare fork(). The function has no callers in the AFNI tree, so it and its
+declaration in 3ddata.h are compiled out under _WIN32.
+
+diff --git a/src/3ddata.h b/src/3ddata.h
+index b5775ff..10956ac 100644
+--- a/src/3ddata.h
++++ b/src/3ddata.h
+@@ -5960,7 +5960,9 @@ extern void AFNI_sleep( int ) ;
+ #define AFNI_log_string(ss) AFNI_logger(ss,0,NULL)
+ extern long long AFNI_logfilesize(void) ;          /* 17 Oct 2007 */
+ 
++#ifndef _WIN32  /* afni-win: fork() does not exist on Windows */
+ extern void AFNI_serverlog( char * ) ;             /* 24 Mar 2005 */
++#endif
+ 
+ void THD_outlier_count( THD_3dim_dataset *, float, int **, int * ) ; /* 15 Aug 2001 */
+ 
+diff --git a/src/thd_logafni.c b/src/thd_logafni.c
+index e65a562..1c0c27f 100644
+--- a/src/thd_logafni.c
++++ b/src/thd_logafni.c
+@@ -19,6 +19,7 @@
+     Web server logs.
+ --------------------------------------------------------------------------*/
+ 
++#ifndef _WIN32  /* afni-win: fork() does not exist on Windows */
+ void AFNI_serverlog( char *str )
+ {
+    pid_t child_pid ;
+@@ -70,3 +71,4 @@ void AFNI_serverlog( char *str )
+ 
+    NI_sleep(1) ; NI_stream_closenow(ns) ; _exit(0) ;
+ }
++#endif /* _WIN32 */

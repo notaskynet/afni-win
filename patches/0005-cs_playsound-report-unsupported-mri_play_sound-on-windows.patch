@@ -1,0 +1,39 @@
+From: afni-win
+Subject: [PATCH] cs_playsound: report that mri_play_sound is unsupported on Windows
+
+Why the compat layer cannot handle this: mri_play_sound() fork()s and the
+child writes a temporary .au file, runs the player through
+system("tcsh -c '...'"), sleeps and removes the file. The child keeps running
+AFNI code without exec, which Windows cannot do, and the layer deliberately
+does not declare fork(). The file is part of libmri, so it must compile. On
+Windows the function now prints an error and returns without playing
+anything; users are 1dsound (optional program) and the AFNI GUI (out of
+scope).
+
+diff --git a/src/cs_playsound.c b/src/cs_playsound.c
+index 27327a2..e68c4e0 100644
+--- a/src/cs_playsound.c
++++ b/src/cs_playsound.c
+@@ -160,6 +160,14 @@ void mri_play_sound_rate_fac( float fff ){
+ /*---------------------------------------------------------------------------*/
+ /* Play sound from a 1D image (up to 4 columns) */
+ 
++#ifdef _WIN32  /* afni-win: fork() does not exist on Windows */
++void mri_play_sound( MRI_IMAGE *imin , int ignore )
++{
++   (void)imin ; (void)ignore ;
++   ERROR_message("mri_play_sound: playing sound is not supported on Windows") ;
++   return ;
++}
++#else
+ void mri_play_sound( MRI_IMAGE *imin , int ignore )
+ {
+    MRI_IMAGE *qim ;
+@@ -220,6 +228,7 @@ void mri_play_sound( MRI_IMAGE *imin , int ignore )
+    unlink(fname) ;
+    _exit(0) ;
+ }
++#endif /* _WIN32 */
+ 
+ /*---------------------------------------------------------------------------*/
+ /*-------- convert value in range -1..1 into 8 bit code via 'mu-law' --------*/

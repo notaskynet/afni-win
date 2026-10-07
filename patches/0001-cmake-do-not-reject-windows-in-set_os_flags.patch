@@ -1,0 +1,24 @@
+From: afni-win
+Subject: [PATCH] cmake: do not reject Windows in set_os_flags
+
+Why the compat layer cannot handle this: the upstream CMake macro
+set_os_flags() stops the configure step with FATAL_ERROR when
+CMAKE_SYSTEM_NAME is Windows. This happens in the build system before any
+source is compiled, so nothing in the include path or in libafni_compat can
+avoid it. The Windows branch now sets no per-file definitions; the platform
+settings that machdep.h would normally select are provided by the forced
+include afni_compat.h.
+
+diff --git a/cmake/get_build_macros_and_functions.cmake b/cmake/get_build_macros_and_functions.cmake
+index 0097cb0..71c7f52 100644
+--- a/cmake/get_build_macros_and_functions.cmake
++++ b/cmake/get_build_macros_and_functions.cmake
+@@ -180,7 +180,7 @@ macro(set_os_flags src_file)
+     )
+     message(STATUS "Configuring on/for macOS")
+   elseif("${CMAKE_SYSTEM_NAME}" STREQUAL "Windows")
+-    message(FATAL_ERROR "Windows is not supported for this build")
++    # afni-win: platform settings come from the forced include afni_compat.h
+   else()
+     message(
+       STATUS "Configuring on/for ${CMAKE_SYSTEM_NAME}. Not sure if this will work..."

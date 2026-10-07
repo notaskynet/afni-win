@@ -1,0 +1,44 @@
+From: afni-win
+Subject: [PATCH] thd_iochan: leave out iochan_fork_relay on Windows
+
+Why the compat layer cannot handle this: iochan_fork_relay() calls fork()
+and continues running AFNI code in the child without exec. Windows cannot
+duplicate a running process, and the layer deliberately does not declare
+fork() so that any new upstream use fails at compile time. The function has
+no callers in the AFNI tree (the only reference is an example in a comment),
+so it and its declaration are compiled out under _WIN32.
+
+diff --git a/src/thd_iochan.c b/src/thd_iochan.c
+index e2934f2..80de4c7 100644
+--- a/src/thd_iochan.c
++++ b/src/thd_iochan.c
+@@ -1593,6 +1593,7 @@ int iochan_ctl( IOCHAN * ioc , int cmd , int arg )
+   -- 23 May 2001 -- RWCox
+ -------------------------------------------------------------------*/
+ 
++#ifndef _WIN32  /* afni-win: fork() does not exist on Windows */
+ static IOCHAN *ioc_kill_1 = NULL ;
+ static IOCHAN *ioc_kill_2 = NULL ;
+ 
+@@ -1738,6 +1739,7 @@ pid_t iochan_fork_relay( char * name_in , char * name_out )
+ 
+    iochan_close(ioc_in) ; iochan_close(ioc_out) ; _exit(1) ;
+ }
++#endif /* _WIN32 */
+ 
+ /*-----------------------------------------------------------------
+   Return time elapsed since first call to this routine
+diff --git a/src/thd_iochan.h b/src/thd_iochan.h
+index 298dd25..e248fcc 100644
+--- a/src/thd_iochan.h
++++ b/src/thd_iochan.h
+@@ -149,7 +149,9 @@ extern int      iochan_ctl( IOCHAN * , int , int ) ;
+ extern int      iochan_force_clear( IOCHAN * ) ;
+ 
+ extern int      iochan_recvloop( IOCHAN *, char *, int ); /* 22 May 2001 */
++#ifndef _WIN32  /* afni-win: fork() does not exist on Windows */
+ extern pid_t    iochan_fork_relay( char *, char * );      /* 23 May 2001 */
++#endif
+ 
+ /** codes for the "cmd" argument to iochan_ctl **/
+ 
