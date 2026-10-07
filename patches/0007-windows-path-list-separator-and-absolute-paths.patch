@@ -1,0 +1,246 @@
+From: afni-win
+Subject: [PATCH] windows: path list separator and absolute path test
+
+Why the compat layer cannot handle this: upstream splits directory lists
+(PATH, AFNI_ATLAS_PATH, AFNI_PLUGINPATH, AFNI_MODELPATH, AFNI_TSPATH, ...)
+by replacing every ':' with a blank, and decides whether a file name is
+absolute by testing for a leading '/'. On Windows every absolute path has a
+':' after the drive letter, so "C:\afni;D:\atlases" is cut into "C",
+"\afni;D", "\atlases", and "-prefix C:/data/out" becomes "./C:/data/out".
+The layer could only rewrite the strings (e.g. translate getenv() results to
+"/c/..." form), which would leak MSYS2-style paths into every other use of
+those variables. The fix is in the parsing itself: mrilib.h defines
+THD_PATH_LIST_SEP (';' under _WIN32, ':' otherwise) and THD_IS_ABSPATH()
+(also accepts "X:/" and "X:\" under _WIN32), and the call sites listed in
+docs/reports/colon-audit.md use them. Behaviour on other systems is
+unchanged.
+
+diff --git a/src/1dTrdm.c b/src/1dTrdm.c
+index 0427e48..f5311ca 100644
+--- a/src/1dTrdm.c
++++ b/src/1dTrdm.c
+@@ -302,7 +302,7 @@ static char *path_dir(char *p)
+ static char *resolve_path(char *base,char *p)
+ {
+    char *d,*out ; size_t n ;
+-   if(p[0]=='/') return strdup(p) ;
++   if(THD_IS_ABSPATH(p)) return strdup(p) ;
+    d=path_dir(base) ; n=strlen(d)+strlen(p)+2 ; out=(char *)malloc(n) ;
+    snprintf(out,n,"%s/%s",d,p) ; free(d) ; return out ;
+ }
+diff --git a/src/3dRSA.c b/src/3dRSA.c
+index e5d1aa8..0a33546 100644
+--- a/src/3dRSA.c
++++ b/src/3dRSA.c
+@@ -3001,7 +3001,7 @@ static void rsa_read_model_series( char *fname , char ***files_out ,
+      for( ii=0 ; ii < n ; ii++ ) if( strcmp(times[ii],lab)==0 )
+        ERROR_exit("3dRSA: -model_series '%s' repeats time label '%s'",fname,lab) ;
+ 
+-     if( ent[0]=='/' ) path=strdup(ent) ;
++     if( THD_IS_ABSPATH(ent) ) path=strdup(ent) ;
+      else {
+        need=strlen(dir)+strlen(ent)+2 ;
+        if( need >= THD_MAX_NAME )
+@@ -3065,7 +3065,7 @@ static RSA_subject_series *rsa_read_subject_model_series( char *fname , int mode
+      if( rsa_string_index(times,nt,tlab)<0 ){
+        times=(char **)realloc(times,sizeof(char *)*(nt+1)); times[nt++]=strdup(tlab) ;
+      }
+-     if( ent[0]=='/' ) path=strdup(ent) ;
++     if( THD_IS_ABSPATH(ent) ) path=strdup(ent) ;
+      else {
+        need=strlen(dir)+strlen(ent)+2 ;
+        if( need>=THD_MAX_NAME )
+diff --git a/src/3dttest++.c b/src/3dttest++.c
+index d562bb4..8f940f1 100644
+--- a/src/3dttest++.c
++++ b/src/3dttest++.c
+@@ -3705,7 +3705,7 @@ int main( int argc , char *argv[] )
+ 
+    /* -Clustsim is not currently working when -prefix uses a full path */
+    /*                                               3 Mar 2020 [rickr] */
+-   if( do_clustsim && prefix && prefix[0] == '/' )
++   if( do_clustsim && prefix && THD_IS_ABSPATH(prefix) )
+      ERROR_exit("Cannot use -Clustsim when -prefix has an absolute path") ;
+ 
+    /* do some checking and editing for Clustsim stuff */
+diff --git a/src/NLfit_model.c b/src/NLfit_model.c
+index 37951c9..e1c017a 100644
+--- a/src/NLfit_model.c
++++ b/src/NLfit_model.c
+@@ -247,7 +247,7 @@ ENTRY("NLFIT_get_many_MODELs") ;
+    /*----- replace colons with blanks -----*/
+ 
+    for( ii=0 ; ii < ll ; ii++ )
+-      if( elocal[ii] == ':' ) elocal[ii] = ' ' ;
++      if( elocal[ii] == THD_PATH_LIST_SEP ) elocal[ii] = ' ' ;
+ 
+    if (NL_DEBUG)
+      { 
+diff --git a/src/mrilib.h b/src/mrilib.h
+index a25b980..b4d0d4d 100644
+--- a/src/mrilib.h
++++ b/src/mrilib.h
+@@ -26,6 +26,23 @@
+ 
+ #define COXEMAIL "rwcox@nih.gov"        /* or /dev/null, if you prefer */
+ 
++/* Separator of directory lists such as PATH or AFNI_ATLAS_PATH, and test
++   for an absolute file name. On Windows lists are separated by ';' (a ':'
++   follows every drive letter) and absolute names may start with "X:/" or
++   "X:\". [afni-win] */
++
++#ifdef _WIN32
++# define THD_PATH_LIST_SEP ';'
++# define THD_IS_ABSPATH(p) ( (p)[0] == '/' ||                              \
++                             ( ( ((p)[0] >= 'A' && (p)[0] <= 'Z') ||        \
++                                 ((p)[0] >= 'a' && (p)[0] <= 'z') ) &&      \
++                               (p)[1] == ':' &&                             \
++                               ((p)[2] == '/' || (p)[2] == '\\') ) )
++#else
++# define THD_PATH_LIST_SEP ':'
++# define THD_IS_ABSPATH(p) ( (p)[0] == '/' )
++#endif
++
+ #ifdef  __cplusplus
+ extern "C" {                    /* care of Greg Balls    7 Aug 2006 [rickr] */
+ #endif
+diff --git a/src/suma_utils.c b/src/suma_utils.c
+index 0a521b4..57b3e53 100644
+--- a/src/suma_utils.c
++++ b/src/suma_utils.c
+@@ -1180,7 +1180,7 @@ SUMA_PARSED_NAME * SUMA_ParseFname_eng (char *FileName, char *ucwd,
+          NewName->Path = (char *)SUMA_malloc(sizeof(char)*(3));
+          sprintf(NewName->Path, "./");
+       }
+-      if (NewName->Path[0] == '/') {
++      if (THD_IS_ABSPATH(NewName->Path)) {
+          NewName->AbsPath = SUMA_copy_string(NewName->Path);
+       } else {
+          char *ptmp = NewName->Path;
+@@ -2018,7 +2018,7 @@ int SUMA_search_file(char **fnamep, char *epath)
+ 
+    /*----- replace colons with blanks -----*/
+    for( ii=0 ; ii < ll ; ii++ )
+-     if( elocal[ii] == ':' ) elocal[ii] = ' ' ;
++     if( elocal[ii] == THD_PATH_LIST_SEP ) elocal[ii] = ' ' ;
+ 
+    /*----- extract blank delimited strings;
+            use as directory names to look for atlas -----*/
+diff --git a/src/thd_get1D.c b/src/thd_get1D.c
+index c7f3924..e13ee5f 100644
+--- a/src/thd_get1D.c
++++ b/src/thd_get1D.c
+@@ -69,7 +69,7 @@ ENTRY("THD_get_many_timeseries") ;
+       /* replace colons with blanks */
+ 
+       for( ii=0 ; ii < ll ; ii++ )
+-         if( elocal[ii] == ':' ) elocal[ii] = ' ' ;
++         if( elocal[ii] == THD_PATH_LIST_SEP ) elocal[ii] = ' ' ;
+ 
+       /* extract blank delimited strings,
+          use as directory names to get timeseries files */
+diff --git a/src/thd_get_tcsv.c b/src/thd_get_tcsv.c
+index d3af45d..0cabf4f 100644
+--- a/src/thd_get_tcsv.c
++++ b/src/thd_get_tcsv.c
+@@ -72,7 +72,7 @@ ENTRY("THD_get_many_tcsv") ;
+       /* replace colons with blanks */
+ 
+       for( ii=0 ; ii < ll ; ii++ )
+-         if( elocal[ii] == ':' ) elocal[ii] = ' ' ;
++         if( elocal[ii] == THD_PATH_LIST_SEP ) elocal[ii] = ' ' ;
+ 
+       /* extract blank delimited strings,
+          use as directory names to get timeseries files */
+diff --git a/src/thd_getpathprogs.c b/src/thd_getpathprogs.c
+index c75b870..678558e 100644
+--- a/src/thd_getpathprogs.c
++++ b/src/thd_getpathprogs.c
+@@ -151,7 +151,7 @@ ENTRY("THD_find_regular_file") ;
+ 
+       /* replace colons with blanks */
+       for( ii=0 ; ii < ll ; ii++ )
+-         if( elocal[ii] == ':' ) elocal[ii] = ' ' ;
++         if( elocal[ii] == THD_PATH_LIST_SEP ) elocal[ii] = ' ' ;
+ 
+       /* extract blank delimited strings,
+          use as directory names to get timeseries files */
+@@ -218,7 +218,7 @@ char *find_afni_file(char * nimlname, int niname, char *altpath)
+       INFO_message("%s not found, trying different paths, if no path is set.\n"
+                      ,nimlname);   
+    
+-   if (nimlname[0] == '/') { /* not found and have abs path, get out */
++   if (THD_IS_ABSPATH(nimlname)) { /* not found and have abs path, get out */
+       RETURN(filestr[icall]);
+    }
+    
+@@ -357,7 +357,7 @@ ENTRY("THD_getpathprogs") ;
+       /* replace colons with blanks */
+ 
+       for( ii=0 ; ii < ll ; ii++ )
+-         if( elocal[ii] == ':' ) elocal[ii] = ' ' ;
++         if( elocal[ii] == THD_PATH_LIST_SEP ) elocal[ii] = ' ' ;
+ 
+       /* extract blank delimited strings,
+          use as directory names to get timeseries files */
+diff --git a/src/thd_initdkptr.c b/src/thd_initdkptr.c
+index 7f07f9f..4007ba3 100644
+--- a/src/thd_initdkptr.c
++++ b/src/thd_initdkptr.c
+@@ -40,7 +40,7 @@ ENTRY("THD_init_diskptr_names") ;
+          int lp = strlen(prefixname) , jj , ld ;
+          for( ii=lp-1 ; ii >= 0 && prefixname[ii] != '/' ; ii-- ) ; /* find last '/' */
+          if( ii >= 0 ){  /* should always be true */
+-            ld = strlen(dname) ; if( prefixname[0] == '/' ) ld = 0 ;
++            ld = strlen(dname) ; if( THD_IS_ABSPATH(prefixname) ) ld = 0 ;
+             memcpy(dname+ld,prefixname,ii+1) ; dname[ld+ii+1] = '\0' ;
+             MCW_strncpy(pname,prefixname+ii+1,THD_MAX_PREFIX) ;
+          } else {
+diff --git a/src/thd_loaddblk.c b/src/thd_loaddblk.c
+index e54529c..5434811 100644
+--- a/src/thd_loaddblk.c
++++ b/src/thd_loaddblk.c
+@@ -645,7 +645,7 @@ fprintf(stderr,"VOL: flist:\n%s\n",flist) ;
+ fprintf(stderr,"VOL[%d]: ptr=%s\n",ibr,ptr) ;
+ #endif
+ 
+-          if( *ptr == '/' ){          /* if filename is absolute, duplicate it */
++          if( THD_IS_ABSPATH(ptr) ){  /* if filename is absolute, duplicate it */
+             fnam[ibr] = strdup(ptr) ;
+           } else {                    /* otherwise, put directory name in front */
+             ii = strlen(blk->diskptr->directory_name) + strlen(ptr) ;
+diff --git a/src/thd_opendset.c b/src/thd_opendset.c
+index f352c38..9ca978e 100644
+--- a/src/thd_opendset.c
++++ b/src/thd_opendset.c
+@@ -94,7 +94,7 @@ char * Add_plausible_path(char *fname)
+    /*----- replace colons with blanks -----*/
+ 
+    for( ii=0 ; ii < ll ; ii++ )
+-     if( elocal[ii] == ':' ) elocal[ii] = ' ' ;
++     if( elocal[ii] == THD_PATH_LIST_SEP ) elocal[ii] = ' ' ;
+ 
+    /*----- extract blank delimited strings;
+            use as directory names to look for atlas -----*/
+diff --git a/src/thd_ttatlas_query.c b/src/thd_ttatlas_query.c
+index 6eece1c..005baba 100644
+--- a/src/thd_ttatlas_query.c
++++ b/src/thd_ttatlas_query.c
+@@ -615,7 +615,7 @@ char * get_atlas_dirname(void)  /* 31 Jan 2008 -- RWCox */
+    ll = strlen(epath) ;
+    elocal = AFMALL(char, sizeof(char) * (ll+2) ) ;
+    strcpy(elocal,epath); elocal[ll] = ' '; elocal[ll+1] = '\0';
+-   for( ii=0 ; ii < ll ; ii++ ) if( elocal[ii] == ':' ) elocal[ii] = ' ';
++   for( ii=0 ; ii < ll ; ii++ ) if( elocal[ii] == THD_PATH_LIST_SEP ) elocal[ii] = ' ';
+ 
+    epos = 0 ;
+    do{
+@@ -716,7 +716,7 @@ THD_3dim_dataset * get_atlas(char *epath, char *aname)
+       /*----- replace colons with blanks -----*/
+ 
+       for( ii=0 ; ii < ll ; ii++ )
+-        if( elocal[ii] == ':' ) elocal[ii] = ' ' ;
++        if( elocal[ii] == THD_PATH_LIST_SEP ) elocal[ii] = ' ' ;
+ 
+       /*----- extract blank delimited strings;
+               use as directory names to look for atlas -----*/
