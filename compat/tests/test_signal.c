@@ -1,4 +1,5 @@
 #include <signal.h>
+#include <unistd.h>
 
 #include "test_common.h"
 
@@ -27,6 +28,8 @@ int main(void) {
   CHECK(received == SIGINT);
   CHECK(signal(SIGTERM, handler) != SIG_ERR);
   CHECK(signal(SIGTERM, SIG_DFL) == handler);
+
+  CHECK_ERRNO(pause(), ENOSYS);
 
   CHECK(SIGIOT == SIGABRT);
   CHECK(SIGPIPE != SIGINT && SIGBUS != SIGFPE && SIGALRM != SIGTERM);
