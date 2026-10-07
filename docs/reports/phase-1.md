@@ -163,3 +163,25 @@ No finding affects the dataset read/write path of `3dinfo`/`3dcalc`/`3dTstat`. T
 - **Q1.** `PATH`-like variables are split at `:` in several places (section 5.1). Options: (a) patch the splitting functions to use `;` on Windows; (b) document that these variables must use `/c/...`-style paths (MSYS2 style) and convert in the layer's `getenv`; (c) something else.
 - **Q2.** Confirm binary mode for stdin/stdout/stderr (section 6).
 - **Q3.** Phase 1 acceptance on real Windows: run `tools/build.py` in MSYS2 UCRT64 on your machine, or wait for the CI runner in phase 4?
+
+## 9. Follow-up after the phase 1 review
+
+Decisions D13–D17 (`docs/DECISIONS.md`).
+
+| Item | State |
+|---|---|
+| `:` audit (D14) | `docs/reports/colon-audit.md`. No name is mistaken for a prefix because of a drive letter. 9 sites split directory lists at `:` and need the D14 macro. Two further problems found (absolute paths recognised only by a leading `/`, `\` not a separator) need a decision before the patch. |
+| Binary standard streams (D13) | recorded |
+| CI (D17) | `.github/workflows/build-windows.yml`: Linux reference build of the tag (in-tree NIfTI and `cmake/gifti`, so both platforms compile the same library sources) → data generation and scenario → MSYS2 UCRT64 build with `tools.build`, compat unit tests, same scenario → comparison (`tests/regression/compare.py`, no tolerance, magnitudes reported). Passes `actionlint`. **Not run yet** — needs a push to GitHub. |
+| Local dry run of the CI scripts | Linux build vs wine build: 34 of 35 compared files identical, all datasets bit-identical. The one difference is the log of `3dcalc(...)`: wine does not pass `TMPDIR` to Windows processes, so the session directory was `/tmp` instead of `.`. In MSYS2 the variable is passed; the CI run will show it. |
+| NIfTI comparison | `vox_offset` is not compared: it depends on the size of the AFNI header extension (history, paths), which differs between platforms (3408 vs 3424 bytes in the dry run). The extension itself is not compared either. |
+| Toolchain | `CMAKE_SYSTEM_NAME` is now set only when cross compiling; in a native MSYS2 shell CMake would otherwise treat the build as cross compilation. |
+| Runtime files (D15, D16) | `manifests/runtime-deps.txt`. qhull from MSYS2. `whereami` moved to optional. |
+| Cross-check environment | `tools/docker/Dockerfile` (Fedora 44, pinned busybox sha256). |
+
+### Licence finding
+
+The spec (section 6) says AFNI is mostly GPL. Upstream `LICENSE.txt` says otherwise: AFNI is a US Government work in the public domain, with listed third-party exceptions (MIT, BSD, LGPL-2, GPL-2.0, GPL-2.0-or-later, GPL-3.0, GPL-3.0-or-later). Relevant for us:
+
+- `src/3DEdge` is GPL-3.0 and is linked into `libmri.dll`, so the distributed binaries are effectively GPL-3.0. That matches the GPL-3.0 licence of this repository.
+- Parts under plain "GNU GPL 2.0" (which may be GPL-2.0-only) are `src/mpegtoppm_dir` and `src/SUMA/SUMA_{coarsen.c,gts.c,gts.h}`. Neither is built in the current scope. If SUMA is added later, combining them with GPL-3.0 code (3DEdge, `afni_compat`) has to be checked.
