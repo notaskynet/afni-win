@@ -141,7 +141,7 @@ def _program_path(bin_dir: Path, program: str) -> Path:
     """
     for candidate in (bin_dir / f"{program}.exe", bin_dir / program):
         if candidate.is_file():
-            return candidate
+            return candidate.resolve()
     raise FileNotFoundError(f"{program} not found in {bin_dir}")
 
 
