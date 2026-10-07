@@ -3,6 +3,7 @@ project(afni_compat C)
 
 option(AFNI_COMPAT_WERROR "Treat warnings in the compat layer as errors" ON)
 option(AFNI_COMPAT_TESTS "Build the compat layer unit tests" ON)
+set(AFNI_COMPAT_BUSYBOX "" CACHE FILEPATH "busybox-w32 executable for the shell tests that need a real sh")
 
 if(NOT CMAKE_RUNTIME_OUTPUT_DIRECTORY)
   set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/bin")
@@ -19,8 +20,18 @@ if(AFNI_COMPAT_ALARM_LINKS)
   message(FATAL_ERROR "alarm() links (MinGW libmingwex stub); the toolchain must pass -Wl,--wrap=alarm")
 endif()
 
+add_library(afni_compat_winsock OBJECT src/winsock_bridge.c)
+set_target_properties(
+  afni_compat_winsock PROPERTIES C_STANDARD 11 C_STANDARD_REQUIRED ON C_EXTENSIONS OFF
+                                 POSITION_INDEPENDENT_CODE ON
+)
+target_compile_definitions(afni_compat_winsock PRIVATE AFNI_COMPAT_WINSOCK_BRIDGE)
+target_compile_options(afni_compat_winsock PRIVATE ${AFNI_COMPAT_WARNINGS})
+
 add_library(
   afni_compat SHARED
+  $<TARGET_OBJECTS:afni_compat_winsock>
+  src/env.c
   src/fs.c
   src/init.c
   src/mman.c
@@ -68,7 +79,7 @@ if(AFNI_COMPAT_TESTS)
   target_compile_options(compat_test_child PRIVATE "SHELL:-include \"${AFNI_COMPAT_HEADER}\"" ${AFNI_COMPAT_WARNINGS})
   target_link_libraries(compat_test_child PRIVATE afni_compat)
 
-  foreach(name fs init mman net process rand48 shell signal string sysinfo time users)
+  foreach(name env fs init mman net process rand48 shell signal string sysinfo time users)
     add_executable(test_${name} tests/test_${name}.c)
     set_target_properties(test_${name} PROPERTIES C_STANDARD 11 C_STANDARD_REQUIRED ON C_EXTENSIONS OFF)
     target_compile_options(test_${name} PRIVATE "SHELL:-include \"${AFNI_COMPAT_HEADER}\"" ${AFNI_COMPAT_WARNINGS})
@@ -76,4 +87,18 @@ if(AFNI_COMPAT_TESTS)
     add_test(NAME compat_${name} COMMAND test_${name} WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
   endforeach()
   add_dependencies(test_process compat_test_child)
+
+  add_executable(compat_test_sh tests/compat_test_sh.c)
+  set_target_properties(compat_test_sh PROPERTIES C_STANDARD 11 C_EXTENSIONS OFF)
+  target_compile_options(compat_test_sh PRIVATE ${AFNI_COMPAT_WARNINGS})
+  add_dependencies(test_shell compat_test_sh)
+
+  if(AFNI_COMPAT_BUSYBOX)
+    configure_file("${AFNI_COMPAT_BUSYBOX}" "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/busybox.exe" COPYONLY)
+    add_executable(test_shell_busybox tests/test_shell_busybox.c)
+    set_target_properties(test_shell_busybox PROPERTIES C_STANDARD 11 C_STANDARD_REQUIRED ON C_EXTENSIONS OFF)
+    target_compile_options(test_shell_busybox PRIVATE "SHELL:-include \"${AFNI_COMPAT_HEADER}\"" ${AFNI_COMPAT_WARNINGS})
+    target_link_libraries(test_shell_busybox PRIVATE afni_compat)
+    add_test(NAME compat_shell_busybox COMMAND test_shell_busybox WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+  endif()
 endif()
