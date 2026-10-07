@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
+#include <windows.h>
 
 int main(int argc, char **argv) {
   FILE *fp;
@@ -20,6 +21,9 @@ int main(int argc, char **argv) {
   }
   fprintf(fp, "ENV=%s\n", getenv("AFNI_COMPAT_TEST_VAR") ? getenv("AFNI_COMPAT_TEST_VAR") : "");
   fclose(fp);
+  if (atoi(argv[2]) == -2) {
+    Sleep(60000);
+  }
   if (atoi(argv[2]) == -1) {
     volatile int *crash = NULL;
     *crash = 1;

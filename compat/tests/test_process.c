@@ -84,6 +84,41 @@ int main(void) {
   CHECK_ERRNO(waitpid(0, &status, 0), ENOSYS);
   CHECK_ERRNO(waitpid(-1, &status, WUNTRACED), ENOSYS);
 
+  {
+    char *sleep_argv[] = {"compat_test_child", "compat_process_sleep.txt", "-2", NULL};
+    pid_t sleeper;
+    CHECK(posix_spawn(&sleeper, child_path, NULL, NULL, sleep_argv, _environ) == 0);
+    CHECK(kill(sleeper, 0) == 0);
+    CHECK(waitpid(sleeper, &status, WNOHANG) == 0);
+    CHECK_ERRNO(kill(sleeper, SIGINT), ENOSYS);
+    CHECK(kill(sleeper, SIGTERM) == 0);
+    CHECK(waitpid(sleeper, &status, 0) == sleeper);
+    CHECK(WIFSIGNALED(status) && WTERMSIG(status) == SIGTERM);
+    CHECK(posix_spawn(&sleeper, child_path, NULL, NULL, sleep_argv, _environ) == 0);
+    CHECK(kill(sleeper, SIGKILL) == 0);
+    CHECK(wait(&status) == sleeper);
+    CHECK(WIFSIGNALED(status) && WTERMSIG(status) == SIGKILL);
+    CHECK_ERRNO(kill(-5, SIGTERM), ENOSYS);
+    remove("compat_process_sleep.txt");
+  }
+
+  {
+    enum { MANY = 70 };
+    char *many_argv[] = {"compat_test_child", "compat_process_many.txt", "4", NULL};
+    int started = 0;
+    int reaped = 0;
+    for (int i = 0; i < MANY; ++i) {
+      started += posix_spawn(&pid, child_path, NULL, NULL, many_argv, _environ) == 0;
+    }
+    CHECK(started == MANY);
+    while (wait(&status) > 0) {
+      reaped += WIFEXITED(status) && WEXITSTATUS(status) == 4;
+    }
+    CHECK(errno == ECHILD);
+    CHECK(reaped == MANY);
+    remove("compat_process_many.txt");
+  }
+
   CHECK(times(&t) != (clock_t)-1);
   CHECK(t.tms_cutime >= 0);
 

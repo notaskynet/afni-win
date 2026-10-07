@@ -17,6 +17,7 @@ int main(void) {
   unsigned char bytes[256];
   char line[64];
   FILE *fp;
+  pid_t pid;
   int status;
   char *slash;
 
@@ -87,6 +88,21 @@ int main(void) {
   CHECK(system("stderr message from the test shell") == 0);
   status = system("no such command");
   CHECK(WIFEXITED(status) && WEXITSTATUS(status) == 127);
+
+  {
+    pid_t first = 0;
+    pid_t second = 0;
+    int codes = 0;
+    CHECK(afni_compat_spawn_shell(&first, "exit 6") == 0);
+    CHECK(afni_compat_spawn_shell(&second, "exit 7") == 0);
+    CHECK(first > 0 && second > 0 && first != second);
+    while ((pid = wait(&status)) > 0) {
+      CHECK(WIFEXITED(status));
+      codes += WEXITSTATUS(status);
+    }
+    CHECK(codes == 13);
+    CHECK(afni_compat_spawn_shell(NULL, NULL) == EINVAL);
+  }
 
   remove("compat_shell_out.bin");
   return TEST_RESULT();

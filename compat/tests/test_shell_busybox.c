@@ -42,5 +42,10 @@ int main(void) {
     CHECK(pclose(fp) == 0);
   }
   CHECK(system("rm -rf 'compat shell dir'") == 0);
+  {
+    pid_t pid = 0;
+    CHECK(afni_compat_spawn_shell(&pid, "echo job \\\n  output &> /dev/null; exit 3") == 0);
+    CHECK(waitpid(pid, &status, 0) == pid && WIFEXITED(status) && WEXITSTATUS(status) == 3);
+  }
   return TEST_RESULT();
 }
