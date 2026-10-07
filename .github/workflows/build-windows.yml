@@ -1,0 +1,166 @@
+name: build-windows
+
+# Minimal version brought forward from phase 4 (docs/DECISIONS.md, D17):
+# build one upstream tag on Windows (MSYS2 UCRT64), run 3dinfo/3dcalc/3dTstat
+# on the same data as a Linux build of the same tag, compare bit for bit.
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Upstream AFNI tag
+        required: true
+        default: AFNI_26.2.09
+  push:
+    branches: [main]
+    paths:
+      - compat/**
+      - cmake/**
+      - patches/**
+      - tools/**
+      - tests/**
+      - .github/workflows/build-windows.yml
+
+env:
+  AFNI_TAG: ${{ inputs.tag || 'AFNI_26.2.09' }}
+  AFNI_UPSTREAM: https://github.com/afni/afni.git
+
+jobs:
+  linux-reference:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install build dependencies
+        run: sudo apt-get update && sudo apt-get install -y ninja-build zlib1g-dev libexpat1-dev
+
+      - name: Fetch upstream
+        run: git clone --depth 1 --branch "$AFNI_TAG" "$AFNI_UPSTREAM" upstream
+
+      - name: Build reference programs
+        env:
+          CC: gcc
+          CXX: g++
+        run: |
+          cmake -S upstream -B build-linux -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCOMP_GUI=OFF -DCOMP_PYTHON=OFF -DCOMP_TCSH=OFF \
+            -DREMOVE_BUILD_PARITY_CHECKS=ON -DUSE_OMP=ON \
+            -DFETCHCONTENT_SOURCE_DIR_NIFTI_CLIB="$PWD/upstream/src/nifti" \
+            -DFETCHCONTENT_SOURCE_DIR_GIFTI_CLIB="$PWD/cmake/gifti"
+          mapfile -t targets < tests/regression/smoke-programs.txt
+          cmake --build build-linux --target "${targets[@]}"
+
+      - uses: astral-sh/setup-uv@v6
+
+      - name: Generate data and run the scenario
+        run: |
+          uv run --frozen python -m tests.regression.smoke prepare \
+            --bin-dir build-linux/targets_built --out-dir smoke/data
+          uv run --frozen python -m tests.regression.smoke run \
+            --bin-dir build-linux/targets_built --data-dir smoke/data --out-dir smoke/linux
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: smoke-data
+          path: smoke/data
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: smoke-linux
+          path: smoke/linux
+
+  windows:
+    needs: linux-reference
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: msys2 {0}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: msys2/setup-msys2@v2
+        with:
+          msystem: UCRT64
+          update: true
+          install: git
+          pacboy: >-
+            gcc:p cmake:p ninja:p zlib:p expat:p qhull:p
+            python:p python-pydantic:p
+
+      - name: Record toolchain versions
+        run: |
+          gcc --version | head -1
+          cmake --version | head -1
+          pacman -Q mingw-w64-ucrt-x86_64-gcc mingw-w64-ucrt-x86_64-crt-git mingw-w64-ucrt-x86_64-zlib \
+            mingw-w64-ucrt-x86_64-expat mingw-w64-ucrt-x86_64-qhull || true
+
+      - name: Compat layer unit tests
+        run: |
+          cmake -S compat -B build-compat -G Ninja \
+            -DCMAKE_TOOLCHAIN_FILE="$PWD/cmake/toolchain-mingw.cmake" -DCMAKE_BUILD_TYPE=Release
+          cmake --build build-compat
+          ctest --test-dir build-compat --output-on-failure
+
+      - name: Build AFNI
+        run: |
+          python -m tools.build --tag "$AFNI_TAG" --upstream-url "$AFNI_UPSTREAM" \
+            --work-dir build-win --manifest tests/regression/smoke-programs.txt
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: smoke-data
+          path: smoke/data
+
+      - name: Run the scenario
+        run: |
+          python -m tests.regression.smoke run \
+            --bin-dir build-win/build/targets_built --data-dir smoke/data --out-dir smoke/windows
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: smoke-windows
+          path: smoke/windows
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: build-windows-logs
+          path: |
+            build-win/build-result.json
+            build-win/build/build.log
+            build-win/build/CMakeCache.txt
+
+  compare:
+    needs: [linux-reference, windows]
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: smoke-linux
+          path: smoke/linux
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: smoke-windows
+          path: smoke/windows
+
+      - uses: astral-sh/setup-uv@v6
+
+      - name: Compare Linux and Windows outputs
+        run: |
+          set +e
+          uv run --frozen python -m tests.regression.compare \
+            --reference smoke/linux --candidate smoke/windows --report report.md
+          status=$?
+          cat report.md >> "$GITHUB_STEP_SUMMARY"
+          exit $status
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: comparison-report
+          path: report.md
