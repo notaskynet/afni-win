@@ -1,14 +1,13 @@
 get_filename_component(AFNI_WIN_ROOT "${CMAKE_CURRENT_LIST_DIR}/.." REALPATH)
 set(AFNI_WIN_COMPAT_INCLUDE "${AFNI_WIN_ROOT}/compat/include")
 
-set(CMAKE_SYSTEM_NAME Windows)
-set(CMAKE_SYSTEM_PROCESSOR x86_64)
-
-if(CMAKE_HOST_WIN32)
+if(CMAKE_HOST_SYSTEM_NAME STREQUAL "Windows")
   set(CMAKE_C_COMPILER gcc)
   set(CMAKE_CXX_COMPILER g++)
   set(CMAKE_RC_COMPILER windres)
 else()
+  set(CMAKE_SYSTEM_NAME Windows)
+  set(CMAKE_SYSTEM_PROCESSOR x86_64)
   set(AFNI_WIN_TRIPLET "x86_64-w64-mingw32ucrt" CACHE STRING "Cross compiler prefix")
   set(AFNI_WIN_SYSROOT "/usr/${AFNI_WIN_TRIPLET}/sys-root/mingw" CACHE PATH "Target sysroot")
   set(CMAKE_C_COMPILER "${AFNI_WIN_TRIPLET}-gcc")
