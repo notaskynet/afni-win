@@ -1,6 +1,10 @@
 #ifndef AFNI_COMPAT_H
 #define AFNI_COMPAT_H
 
+/* src/winsock_bridge.c includes <winsock2.h> itself and must not see the
+   POSIX declarations below (the toolchain forces this header everywhere). */
+#ifndef AFNI_COMPAT_WINSOCK_BRIDGE
+
 /*
  * Forced include for every translation unit of the Windows build
  * (-include afni_compat.h). It must be processed before any system header.
@@ -148,6 +152,9 @@ AFNI_COMPAT_API int gethostname(char *name, size_t len);
 
 AFNI_COMPAT_API int fcntl(int fd, int cmd, ...);
 
+/* close() that also closes sockets (see sys/socket.h) */
+AFNI_COMPAT_API int afni_compat_close(int fd);
+
 /* ---- sys/file.h ---- */
 
 #define LOCK_SH 1
@@ -220,6 +227,11 @@ AFNI_COMPAT_API afni_compat_sighandler_t afni_compat_signal(int sig,
 #define popen(command, mode) afni_compat_popen((command), (mode))
 #define pclose(stream) afni_compat_pclose(stream)
 #define system(command) afni_compat_system(command)
+#ifndef __cplusplus
+#define close(fd) afni_compat_close(fd)
 #endif
+#endif
+
+#endif /* AFNI_COMPAT_WINSOCK_BRIDGE */
 
 #endif
