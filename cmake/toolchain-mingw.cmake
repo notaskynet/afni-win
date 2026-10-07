@@ -25,20 +25,12 @@ else()
   endif()
 endif()
 
-execute_process(
-  COMMAND "${CMAKE_C_COMPILER}" -print-file-name=binmode.o
-  OUTPUT_VARIABLE AFNI_WIN_BINMODE_OBJECT
-  OUTPUT_STRIP_TRAILING_WHITESPACE
-)
-if(NOT EXISTS "${AFNI_WIN_BINMODE_OBJECT}")
-  message(FATAL_ERROR "binmode.o not found via ${CMAKE_C_COMPILER} -print-file-name")
-endif()
-
 set(_afni_win_compile "-I${AFNI_WIN_COMPAT_INCLUDE} -include ${AFNI_WIN_COMPAT_INCLUDE}/afni_compat.h")
 set(CMAKE_C_FLAGS_INIT "${_afni_win_compile}")
 set(CMAKE_CXX_FLAGS_INIT "${_afni_win_compile}")
-set(CMAKE_EXE_LINKER_FLAGS_INIT "${AFNI_WIN_BINMODE_OBJECT} -Wl,--wrap=alarm")
-set(CMAKE_SHARED_LINKER_FLAGS_INIT "-Wl,--wrap=alarm")
-set(CMAKE_MODULE_LINKER_FLAGS_INIT "-Wl,--wrap=alarm")
+set(_afni_win_link "-Wl,--wrap=alarm")
+set(CMAKE_EXE_LINKER_FLAGS_INIT "${_afni_win_link}")
+set(CMAKE_SHARED_LINKER_FLAGS_INIT "${_afni_win_link}")
+set(CMAKE_MODULE_LINKER_FLAGS_INIT "${_afni_win_link}")
 
 set(CMAKE_PROJECT_AFNI_INCLUDE "${AFNI_WIN_ROOT}/cmake/afni-win-project.cmake")
