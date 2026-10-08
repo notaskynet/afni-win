@@ -197,5 +197,16 @@ Draft acceptance criteria for the implementation phases:
 ## 9. Open points
 
 - AFNI Bootcamp data: no stated licence; `afni.nimh.nih.gov` not reachable from the research machine, reachable from GitHub runners. The prototype uses OpenNeuro `ds000102` (public domain) instead.
-- QC report and spaces in paths: section 8.
-- R: in scope or not.
+- `afni -ver` at the start of every proc script (U5): the GUI program is not built; to be resolved in S1 (no silent stub).
+
+## 10. Decisions and plan
+
+Confirmed (D34): strategy A; QC report later (Cygwin/X research phase); R in scope together with the pipeline; Cyrillic paths supported, paths with spaces not supported (clear error); CI reference data `ds000102` `sub-08`.
+
+| Phase | Content | Done when |
+|---|---|---|
+| S1 Programs | release build with `AFNI_WIN_EXTRA_PROGRAMS` (`count_afni`, `p2dsetstat`, `whereami_afni`, ...) and `AFNI_WIN_PTAYLOR`; the 15 pipeline programs of `tests/scripts/ap-programs.txt` required; X-free `3dSkullStrip` and `1dplot` image output; `afni -ver` (U5); UTF-8 code-page manifest for all programs | all pipeline programs build in CI; `3dSkullStrip` result matches Linux; the pipeline runs without the shared pre-stripped anatomy |
+| S2 Scripting runtime | package and installer carry a minimal MSYS2 userland (`tcsh`, `sh`, coreutils, `sed`, `grep`, `gawk`, `perl`, `bc`), UCRT64 Python with numpy and matplotlib, `afnipy`, the upstream scripts and the shell shim; AFNI shell and `.cmd` launchers for scripts; environment (`AFNI_ALLOW_ARBITRARY_FILENAMES`, space check); licences and source offer | `afni_proc.py` and the proc script run from the installed package, from the AFNI shell and from `cmd.exe` |
+| S3 R | R (MSYS2 `mingw-w64-r`), `R_io.dll`, CRAN packages of the R programs; `3dMVM`, `3dLMEr` | R programs run from the package and match Linux |
+| S4 Acceptance in CI | pipeline from the installed package vs Linux with the criteria of section 8 (fraction rule added to `tests.regression.compare`), Cyrillic data directory, group analysis (`3dttest++`, `3dMVM`) on several subjects, time ratio | all criteria pass in `build-windows.yml` |
+| S5 QC report (later) | research: `afni` GUI under Cygwin/X for `@chauffeur_afni` | separate decision |
