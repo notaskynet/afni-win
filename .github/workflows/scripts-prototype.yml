@@ -187,6 +187,10 @@ jobs:
           sed -e 's/@PACKAGE_ORIGIN@/Astron/' -e 's/@PACKAGE_REV@/6/' -e 's/@PACKAGE_VERS@/24/' \
             -e 's/@PACKAGE_PATCHLEVEL@/16/' -e 's/@PACKAGE_DATE@/2025-07-09/' \
             tcsh-native/patchlevel.h.in > tcsh-native/patchlevel.h
+          # The port's allocator (fmalloc, with sbrk emulated in win32/fork.c)
+          # is compiled only with HAVE_WORKING_SBRK, which nothing defines.
+          cp tcsh-native/system/win32 tcsh-native/config.h
+          echo '#define HAVE_WORKING_SBRK 1' >> tcsh-native/config.h
 
       - name: Build native tcsh (win32 port, MSVC)
         id: tcsh_native
@@ -195,7 +199,6 @@ jobs:
         shell: cmd
         run: |
           cd tcsh-native
-          copy /Y system\win32 config.h
           copy /Y win32\Makefile.win32 Makefile.win32
           nmake -nologo -f Makefile.win32
           dir *.exe
