@@ -11,5 +11,9 @@ int main(void) {
   CHECK(strcasestr(text, "") == text);
   CHECK(strcasestr(text, "missing") == NULL);
   CHECK(strcasestr("", "x") == NULL);
+
+  CHECK(index(text, 'o') == text + 4);
+  CHECK(index(text, 'Z') == NULL);
+  CHECK(index(text, '\0') == text + strlen(text));
   return TEST_RESULT();
 }

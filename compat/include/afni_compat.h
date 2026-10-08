@@ -54,6 +54,8 @@ AFNI_COMPAT_API void afni_compat_runtime(void);
 typedef int uid_t;
 typedef int gid_t;
 typedef int key_t;
+/* BSD type still used by X toolkit headers and widget code (SUMA's GLw). */
+typedef char *caddr_t;
 
 /* ---- AFNI machdep.h settings (no Windows branch exists upstream) ---- */
 
@@ -104,6 +106,8 @@ AFNI_COMPAT_API int afni_compat_spawn_shell(pid_t *pid, const char *command);
 /* ---- string.h ---- */
 
 AFNI_COMPAT_API char *strcasestr(const char *haystack, const char *needle);
+/* Legacy BSD name of strchr (strings.h), used by SUMA. */
+AFNI_COMPAT_API char *index(const char *s, int c);
 
 /* ---- sys/stat.h ---- */
 
