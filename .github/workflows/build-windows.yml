@@ -178,6 +178,51 @@ jobs:
           python -m tools.package --build-dir build-win --source-dir build-win/upstream \
             --runtime-dir "$(cygpath -w /ucrt64/bin)" --busybox busybox64u.exe --output-dir dist
 
+      - name: Build the installer
+        shell: pwsh
+        run: |
+          $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
+          if (-not (Test-Path $iscc)) {
+            choco install innosetup -y --no-progress
+            if ($LASTEXITCODE -ne 0) { throw "Inno Setup installation failed" }
+          }
+          $version = $env:AFNI_TAG -replace '^AFNI_', ''
+          $numeric = (($version.Split('.') | ForEach-Object { [int]$_ }) + 0) -join '.'
+          & $iscc /Q "/DAppVersion=$version" "/DNumericVersion=$numeric" `
+            "/DSourceDir=$PWD\dist\afni-$env:AFNI_TAG-win64" "/DOutputDir=$PWD\dist" `
+            "/DOutputName=afni-$env:AFNI_TAG-win64-setup" installer\afni-win.iss
+          if ($LASTEXITCODE -ne 0) { throw "ISCC failed with $LASTEXITCODE" }
+
+      # Silent per-user installation with the PATH task, a program run with
+      # PATH taken from the registry only, then a silent uninstallation.
+      - name: Test the installer
+        shell: pwsh
+        run: |
+          $dir = "$env:RUNNER_TEMP\afni-install"
+          $setup = "dist\afni-$env:AFNI_TAG-win64-setup.exe"
+          $p = Start-Process $setup -ArgumentList '/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', `
+            '/CURRENTUSER', "/DIR=$dir", '/TASKS=addtopath', "/LOG=$env:RUNNER_TEMP\install.log" -Wait -PassThru
+          if ($p.ExitCode -ne 0) { Get-Content "$env:RUNNER_TEMP\install.log"; throw "setup exited with $($p.ExitCode)" }
+          $userPath = [Environment]::GetEnvironmentVariable('Path', 'User')
+          if (($userPath -split ';') -notcontains $dir) { throw "install directory not on the user PATH: $userPath" }
+          $work = New-Item -ItemType Directory "$env:RUNNER_TEMP\installer-check"
+          Push-Location $work
+          $env:Path = "$userPath;$env:SystemRoot\System32;$env:SystemRoot"
+          Remove-Item Env:HOME, Env:TMPDIR -ErrorAction SilentlyContinue
+          3dcalc -a 'jRandomDataset:8,8,8,2' -expr 'a*10' -prefix check
+          if ($LASTEXITCODE -ne 0) { throw "3dcalc failed" }
+          $env:AFNI_COMPRESSOR = 'GZIP'
+          3dcalc -a 'check+orig' -expr 'a+1' -prefix check_gz
+          if (-not (Test-Path 'check_gz+orig.BRIK.gz')) { throw "gzip output missing" }
+          3dinfo -n4 'check_gz+orig'
+          if ($LASTEXITCODE -ne 0) { throw "3dinfo failed" }
+          Pop-Location
+          Start-Process "$dir\unins000.exe" -ArgumentList '/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART' -Wait
+          for ($i = 0; $i -lt 60 -and (Test-Path "$dir\3dcalc.exe"); $i++) { Start-Sleep -Seconds 2 }
+          if (Test-Path "$dir\3dcalc.exe") { throw "uninstall left the programs" }
+          $userPath = [Environment]::GetEnvironmentVariable('Path', 'User')
+          if (($userPath -split ';') -contains $dir) { throw "uninstall left the PATH entry" }
+
       - uses: actions/download-artifact@v4
         with:
           name: regression-data
@@ -201,6 +246,7 @@ jobs:
           name: package
           path: |
             dist/*.zip
+            dist/*-setup.exe
             dist/package.json
 
       - uses: actions/upload-artifact@v4
@@ -300,10 +346,11 @@ jobs:
             --comparison artifacts/comparison/comparison.md \
             --posix-diff artifacts/comparison/posix-diff.md \
             --packages artifacts/build-windows-logs/msys2-packages.txt \
+            --installer "artifacts/package/afni-$AFNI_TAG-win64-setup.exe" \
             --commit "$GITHUB_SHA" --output notes.md
           gh release create "$AFNI_TAG-win" --target "$GITHUB_SHA" \
             --title "AFNI $AFNI_TAG for Windows" --notes-file notes.md \
-            artifacts/package/*.zip artifacts/package/package.json \
+            artifacts/package/*-setup.exe artifacts/package/*.zip artifacts/package/package.json \
             artifacts/comparison/comparison.md artifacts/posix-callsites/posix-callsites.json \
             artifacts/build-windows-logs/build-win/build-result.json
 
