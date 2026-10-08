@@ -1,0 +1,3 @@
+// afni-win: replaces MinGW's default-manifest.o (docs/DECISIONS.md D37).
+// RT_MANIFEST (24), ID 1: the manifest of the executable.
+1 24 "afni.manifest"
