@@ -55,7 +55,7 @@ jobs:
         run: |
           uv run --frozen ruff check .
           uv run --frozen ruff format --check .
-          uv run --frozen ty check tools tests
+          uv run --frozen ty check tools tests runtime
           uv run --frozen pytest -q tests
 
   linux-reference:
@@ -148,10 +148,14 @@ jobs:
         with:
           msystem: UCRT64
           update: true
-          install: git make zstd
+          # Second line: the scripting runtime shipped in the package
+          # (manifests/scripting-runtime.txt, D38).
+          install: >-
+            git make zstd pacman-contrib
+            tcsh bash coreutils sed grep gawk perl bc which procps-ng findutils diffutils tar gzip
           pacboy: >-
             gcc:p cmake:p ninja:p zlib:p expat:p qhull:p libjpeg-turbo:p gsl:p
-            python:p python-pydantic:p
+            python:p python-pydantic:p python-numpy:p python-matplotlib:p
 
       - name: Record toolchain and runtime package versions
         run: |
@@ -192,7 +196,8 @@ jobs:
       - name: Package
         run: |
           python -m tools.package --build-dir build-win --source-dir build-win/upstream \
-            --runtime-dir "$(cygpath -w /ucrt64/bin)" --busybox busybox64u.exe --output-dir dist
+            --runtime-dir "$(cygpath -w /ucrt64/bin)" --busybox busybox64u.exe --output-dir dist \
+            --msys-root "$(cygpath -m /)"
 
       - name: Build the installer
         shell: pwsh
