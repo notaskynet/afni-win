@@ -1,12 +1,13 @@
-# X11, Xt, Motif, OpenGL and AFNI X-library (mrix) entry points that the
-# SUMA code linked into 3dSkullStrip references but that the Windows build
-# does not have (cmake/afni-suma-nox.cmake). Each function is implemented by
-# afni_x_absent.dll and fails: it prints its name to stderr and exits with
-# status 1. Data symbols are zero-filled objects of the given size (bytes).
-# None of them is reached by 3dSkullStrip without -visual / -talk_suma
-# (checked on Linux by linking against the same generated library).
-# Generated from the unresolved symbols of a Linux link of 3dSkullStrip
-# against libSUMA without X/GL libraries (AFNI_26.2.09).
+# X11, Xt, Motif, OpenGL and AFNI X-library (mrix) entry points referenced
+# by console programs that upstream links with X but that use no display:
+# 3dSkullStrip (through libSUMA) and 1dplot with -jpg/-png/-ps
+# (cmake/afni-nox.cmake). The Windows build has no X, so afni_x_absent.dll
+# implements each function as: print its name to stderr, exit with status 1.
+# Data symbols are zero-filled objects of the given size (bytes).
+# Generated from the unresolved symbols of Linux links of these programs
+# without X/GL libraries (AFNI_26.2.09); the same programs linked on Linux
+# against the same generated library give bit-identical results and never
+# reach these functions (3dSkullStrip with and without -orig_vol, 1dplot -jpg).
 #
 # <name> function
 # <name> data <size>
@@ -45,18 +46,24 @@ MCW_widget_visible function
 NJ_bigmaps_init function
 SNAP_NoDuplicates function
 SNAP_OkDuplicates function
+XAllocColor function
+XAllocColorCells function
 XAllocNamedColor function
 XBell function
+XChangeGC function
 XCheckTypedWindowEvent function
 XCreateColormap function
 XCreateFontCursor function
+XCreateGC function
 XCreatePixmap function
 XCreateWindow function
 XDisplayName function
 XFree function
 XFreeColormap function
+XFreeColors function
 XGetDefault function
 XGetErrorText function
+XGetIconSizes function
 XGetInputFocus function
 XGetRGBColormaps function
 XGetVisualInfo function
@@ -64,6 +71,7 @@ XGetWMColormapWindows function
 XGetWindowAttributes function
 XIconifyWindow function
 XInternAtom function
+XListPixmapFormats function
 XLoadQueryFont function
 XLookupString function
 XMapRaised function
@@ -71,15 +79,23 @@ XMapWindow function
 XOpenDisplay function
 XParseColor function
 XPutImage function
+XQueryColors function
 XQueryPointer function
 XRaiseWindow function
 XScreenNumberOfScreen function
+XSetBackground function
+XSetDashes function
 XSetErrorHandler function
+XSetFont function
 XSetForeground function
 XSetWMColormapWindows function
+XStoreColor function
+XStoreColors function
 XSync function
+XTextExtents function
 XUngrabPointer function
 XUnmapWindow function
+XVisualIDFromVisual function
 XWithdrawWindow function
 XmAddProtocolCallback function
 XmCreateDrawingArea function
@@ -131,6 +147,7 @@ XtAddEventHandler function
 XtAppAddTimeOut function
 XtAppAddWorkProc function
 XtAppError function
+XtAppMainLoop function
 XtAppPending function
 XtAppProcessEvent function
 XtAppSetWarningHandler function
@@ -142,6 +159,7 @@ XtCloseDisplay function
 XtCreateWindow function
 XtDestroyApplicationContext function
 XtDestroyWidget function
+XtDisplay function
 XtFree function
 XtGetApplicationResources function
 XtInsertEventHandler function
@@ -161,6 +179,7 @@ XtRemoveCallback function
 XtRemoveEventHandler function
 XtRemoveTimeOut function
 XtRemoveWorkProc function
+XtScreen function
 XtSetSensitive function
 XtShellStrings data 1289
 XtStrings data 2649
@@ -168,6 +187,7 @@ XtTranslateCoords function
 XtUnmanageChild function
 XtUnrealizeWidget function
 XtVaAppCreateShell function
+XtVaAppInitialize function
 XtVaCreateArgsList function
 XtVaCreateManagedWidget function
 XtVaCreatePopupShell function
@@ -176,8 +196,10 @@ XtVaGetValues function
 XtVaSetValues function
 XtWarning function
 XtWidgetToApplicationContext function
+XtWindow function
 XtWindowOfObject function
 _XmStrings data 20027
+_XtCheckSubclassFlag function
 _XtInherit function
 delete_memplot function
 forceExpose function
@@ -297,11 +319,15 @@ glutBitmapTimesRoman10 data 8
 glutBitmapTimesRoman24 data 8
 glutBitmapWidth function
 init_XDBE function
+memplot_to_X11_funfunfun function
+memplot_to_X11_sef function
+memplot_to_X11_set_DC function
+memplot_to_X11_set_substitute function
+memplot_to_topshell function
+memplot_topshell_setsaver function
 mri_to_XImage function
 needsX11Redraw function
 npane_big data 8
-plot_ts_mem function
-plot_ts_xypush function
 pm_decode_geom function
 pm_donebut_CB function
 pm_expose_CB function
@@ -309,6 +335,7 @@ pm_psfile_CB function
 pm_psprint_CB function
 pm_resize_CB function
 redraw_topshell function
+set_wintitle_memplot function
 topLevelShellWidgetClass data 8
 widgetClassRec data 224
 xmArrowButtonWidgetClass data 8
