@@ -66,3 +66,4 @@ HOME env.c set at load time from USERPROFILE (forward slashes) when unset
 TMPDIR env.c set at load time from GetTempPath (forward slashes, no trailing slash) when unset
 fseek afni_compat.h mapped to _fseeki64
 ftell afni_compat.h mapped to _ftelli64
+fopen stdio.c binary unless the mode has "t" (POSIX has no text mode), independent of the host process's _fmode; AFNI code calls it as afni_compat_fopen
