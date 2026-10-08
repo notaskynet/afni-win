@@ -7,6 +7,7 @@ release and the versions of the MSYS2 packages that were shipped.
 """
 
 import argparse
+import hashlib
 import logging
 from pathlib import Path
 
@@ -30,6 +31,7 @@ class NotesConfig(BaseModel):
     packages: Path
     commit: str
     output: Path
+    installer: Path | None = None
 
 
 def render_notes(
@@ -39,6 +41,7 @@ def render_notes(
     posix_diff: str,
     packages: str,
     commit: str,
+    installer: tuple[str, str] | None = None,
 ) -> str:
     """Render the release body.
 
@@ -49,6 +52,7 @@ def render_notes(
         posix_diff: Markdown report of tools.posix_diff.
         packages: ``pacman -Q`` output for the shipped MSYS2 packages.
         commit: afni-win commit that produced the build.
+        installer: File name and sha256 of the Windows installer, if built.
 
     Returns:
         Markdown text.
@@ -63,9 +67,21 @@ def render_notes(
         "",
         *[f"- [`{p}`]({REPOSITORY_URL}/blob/{commit}/patches/{p})" for p in build.patches],
         "",
+        "### Download",
+        "",
+        *(
+            [
+                f"- **`{installer[0]}`**: installer, recommended. Run it and follow the wizard;",
+                "  afterwards open *AFNI Command Prompt* from the Start menu.",
+                f"  sha256 `{installer[1]}`",
+            ]
+            if installer is not None
+            else []
+        ),
+        f"- `{package.archive}`: the same programs as a zip archive, sha256 `{package.sha256}`",
+        "",
         "### Contents",
         "",
-        f"- `{package.archive}`, sha256 `{package.sha256}`",
         f"- required programs: {len(package.programs)} (all of them)",
         f"- optional programs: {len(package.optional_programs)} built, "
         f"{len(not_built)} not built" + (f": {' '.join(not_built)}" if not_built else ""),
@@ -104,6 +120,7 @@ def _parse_args() -> NotesConfig:
     parser.add_argument("--packages", type=Path, required=True)
     parser.add_argument("--commit", required=True)
     parser.add_argument("--output", type=Path, required=True)
+    parser.add_argument("--installer", type=Path)
     return NotesConfig(**vars(parser.parse_args()))
 
 
@@ -118,6 +135,11 @@ def main() -> None:
         config.posix_diff.read_text(),
         config.packages.read_text(),
         config.commit,
+        (
+            (config.installer.name, hashlib.sha256(config.installer.read_bytes()).hexdigest())
+            if config.installer is not None
+            else None
+        ),
     )
     config.output.write_text(text)
     logger.info("Wrote %s", config.output)
