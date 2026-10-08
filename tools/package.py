@@ -61,6 +61,7 @@ class PackageResult(BaseModel):
     archive: str
     sha256: str
     scripting: ScriptingResult | None = None
+    scripting_dlls: list[str] = Field(default_factory=list)
 
 
 def imported_dlls(objdump: str, path: Path) -> list[str]:
@@ -115,6 +116,29 @@ def resolve_runtime(
                 found[key] = available[key]
                 queue.append(available[key])
     return sorted(found.values(), key=lambda p: p.name.lower())
+
+
+def complete_runtime_tree(objdump: str, tree: Path, bin_dir: Path, source_bin: Path) -> list[Path]:
+    """Copy the DLLs that the files of a runtime tree import but lack.
+
+    Package dependencies do not always name the DLLs a program loads (the
+    MSYS2 base runtime, for example); the import tables do. Every ``.exe``,
+    ``.dll`` and ``.pyd`` of the tree is followed recursively.
+
+    Args:
+        objdump: ``objdump`` executable.
+        tree: Runtime tree in the package (``msys`` or ``python``).
+        bin_dir: Directory of the tree that holds its DLLs.
+        source_bin: Directory of the MSYS2 installation with the same DLLs.
+
+    Returns:
+        DLLs copied into ``bin_dir``.
+    """
+    roots = sorted(p for suffix in ("exe", "dll", "pyd") for p in tree.rglob(f"*.{suffix}"))
+    missing = resolve_runtime(objdump, roots, bin_dir, source_bin)
+    for path in missing:
+        shutil.copy2(path, bin_dir / path.name)
+    return missing
 
 
 def _readme(result: BuildResult, programs: list[str], helpers: list[str]) -> str:
@@ -196,12 +220,29 @@ def package(config: PackageConfig) -> PackageResult:
     (root / "licenses" / "busybox-w32.txt").write_text(BUSYBOX_NOTICE)
     (root / "README.txt").write_text(_readme(result, programs, [h.name for h in helpers]))
     scripting = None
+    scripting_dlls: list[Path] = []
     if config.msys_root is not None:
+        r_io = targets / "R_io.so"
         scripting = assemble(
             ScriptingConfig(
-                package_dir=root, source_dir=config.source_dir, msys_root=config.msys_root
+                package_dir=root,
+                source_dir=config.source_dir,
+                msys_root=config.msys_root,
+                r_home=config.r_home,
+                r_io=r_io if config.r_home is not None else None,
             )
         )
+        for tree, bin_dir, source_bin in (
+            ("msys", "msys/usr/bin", "usr/bin"),
+            ("python", "python/bin", "ucrt64/bin"),
+        ):
+            scripting_dlls += complete_runtime_tree(
+                config.objdump, root / tree, root / bin_dir, config.msys_root / source_bin
+            )
+        if scripting_dlls:
+            logger.info(
+                "Runtime DLLs added from import tables: %s", [p.name for p in scripting_dlls]
+            )
 
     archive = config.output_dir / f"{name}.zip"
     with zipfile.ZipFile(archive, "w", zipfile.ZIP_DEFLATED) as zf:
@@ -221,6 +262,7 @@ def package(config: PackageConfig) -> PackageResult:
         archive=archive.name,
         sha256=digest,
         scripting=scripting,
+        scripting_dlls=[p.name for p in scripting_dlls],
     )
 
 
