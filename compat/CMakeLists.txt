@@ -31,6 +31,7 @@ target_compile_options(afni_compat_winsock PRIVATE ${AFNI_COMPAT_WARNINGS})
 add_library(
   afni_compat SHARED
   $<TARGET_OBJECTS:afni_compat_winsock>
+  src/dl.c
   src/env.c
   src/fs.c
   src/init.c
@@ -79,7 +80,7 @@ if(AFNI_COMPAT_TESTS)
   target_compile_options(compat_test_child PRIVATE "SHELL:-include \"${AFNI_COMPAT_HEADER}\"" ${AFNI_COMPAT_WARNINGS})
   target_link_libraries(compat_test_child PRIVATE afni_compat)
 
-  foreach(name env fs init mman net process rand48 shell signal string sysinfo time users)
+  foreach(name dl env fs init mman net process rand48 shell signal string sysinfo time users)
     add_executable(test_${name} tests/test_${name}.c)
     set_target_properties(test_${name} PROPERTIES C_STANDARD 11 C_STANDARD_REQUIRED ON C_EXTENSIONS OFF)
     target_compile_options(test_${name} PRIVATE "SHELL:-include \"${AFNI_COMPAT_HEADER}\"" ${AFNI_COMPAT_WARNINGS})
@@ -87,6 +88,11 @@ if(AFNI_COMPAT_TESTS)
     add_test(NAME compat_${name} COMMAND test_${name} WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
   endforeach()
   add_dependencies(test_process compat_test_child)
+
+  add_library(compat_test_module MODULE tests/compat_test_module.c)
+  set_target_properties(compat_test_module PROPERTIES PREFIX "" C_STANDARD 11 C_EXTENSIONS OFF
+                                                      LIBRARY_OUTPUT_DIRECTORY "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}")
+  add_dependencies(test_dl compat_test_module)
 
   add_executable(compat_test_sh tests/compat_test_sh.c)
   set_target_properties(compat_test_sh PROPERTIES C_STANDARD 11 C_EXTENSIONS OFF)
