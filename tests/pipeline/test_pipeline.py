@@ -12,6 +12,7 @@ from tests.pipeline.run import (
     environment,
     log_tail,
     output_patterns,
+    probes,
     time_report,
 )
 from tests.regression.compare import CompareConfig, compare
@@ -114,3 +115,13 @@ def test_log_tail_keeps_the_last_lines() -> None:
     tail = log_tail(raw)
     assert tail.splitlines()[0] == "line 60" and tail.endswith("line 99")
     assert log_tail(b"\xff") == "\ufffd"
+
+
+def test_probes_cover_every_start_path(tmp_path: Path) -> None:
+    """Direct, sh, Python shell=True and tcsh, on the same dataset."""
+    windows = probes("windows", tmp_path, tmp_path / "MNI_brain.nii.gz")
+    assert [label for label, _ in windows] == ["direct", "sh -c", "python shell=True", "tcsh -c"]
+    assert windows[1][1][0].endswith("sh.exe")
+    assert windows[3][1][0].endswith("tcsh.cmd")
+    assert "shell=True" in windows[2][1][2]
+    assert probes("linux", tmp_path, tmp_path / "x.nii")[3][1][0] == "tcsh"

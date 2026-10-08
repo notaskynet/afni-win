@@ -5,6 +5,9 @@ the ``afni_proc.py`` pipeline of every subject, all subjects at once, and
 copies the compared outputs to ``<results>/outputs/<subject>/``. ``group``
 runs ``group.tcsh`` (``3dttest++`` and ``3dMVM``) on the subject results.
 ``time`` checks the wall time of the subjects against the Linux run.
+``check`` starts ``3dinfo`` on the template in each way the pipeline starts
+programs (directly, ``sh -c``, Python ``shell=True``, tcsh) and logs what each
+printed, so that a broken link of the runtime shows up by name.
 
 On Windows everything starts through the installed package: ``afni_proc.py``
 through its ``.cmd`` launcher, the proc script through ``tcsh.cmd``, and the
@@ -397,6 +400,64 @@ def prepare(config: PipelineConfig) -> None:
             raise RuntimeError(f"{cmd[0]} failed, see {log}")
 
 
+def probes(platform: Platform, afni_dir: Path, dataset: Path) -> list[tuple[str, list[str]]]:
+    """Ways in which the pipeline starts an AFNI program, each on one dataset.
+
+    Args:
+        platform: ``linux`` or ``windows``.
+        afni_dir: AFNI directory.
+        dataset: Dataset to read (on Windows under a non-ASCII directory).
+
+    Returns:
+        (label, command) pairs: the program directly, through ``sh -c``,
+        through Python ``shell=True`` (the afnipy path) and through tcsh.
+    """
+    info = f"3dinfo -d3 {_path(dataset)}"
+    script = (
+        "import subprocess; "
+        f"r = subprocess.run({info!r}, shell=True, capture_output=True); "
+        "print(r.returncode, ascii(r.stdout), ascii(r.stderr))"
+    )
+    if platform == "windows":
+        sh = str(afni_dir / "msys" / "usr" / "bin" / "sh.exe")
+        python = str(afni_dir / "python" / "bin" / "python.exe")
+        return [
+            ("direct", [command(platform, afni_dir, "3dinfo"), "-d3", _path(dataset)]),
+            ("sh -c", [sh, "-c", info]),
+            ("python shell=True", [python, "-c", script]),
+            ("tcsh -c", [command(platform, afni_dir, "tcsh"), "-c", info]),
+        ]
+    return [
+        ("direct", [command(platform, afni_dir, "3dinfo"), "-d3", _path(dataset)]),
+        ("sh -c", ["sh", "-c", info]),
+        ("python shell=True", ["python", "-c", script]),
+        ("tcsh -c", ["tcsh", "-c", info]),
+    ]
+
+
+def check(config: PipelineConfig) -> bool:
+    """Start ``3dinfo`` in each way of :func:`probes` and log the results.
+
+    Args:
+        config: Run configuration (needs the template of ``prepare``).
+
+    Returns:
+        True if every probe printed the voxel size.
+    """
+    env = environment(config.platform, config.afni_dir, dict(os.environ))
+    log = config.results_dir / "logs" / "check.log"
+    ok = True
+    for label, cmd in probes(config.platform, config.afni_dir, config.work_dir / TEMPLATE):
+        status = _run(cmd, config.work_dir, env, log)
+        output = log.read_bytes().decode("utf-8", "replace").strip()
+        passed = status == 0 and "1.000000" in output
+        ok = ok and passed
+        logger.info(
+            "check %s: status %d, %s: %s", label, status, "ok" if passed else "FAILED", output
+        )
+    return ok
+
+
 def run_subject(config: PipelineConfig, subject: str) -> SubjectResult:
     """Write and run the pipeline of one subject and copy its outputs.
 
@@ -569,7 +630,7 @@ def _parse_args() -> tuple[str, PipelineConfig | TimeConfig]:
     """
     parser = argparse.ArgumentParser(description=__doc__)
     sub = parser.add_subparsers(dest="action", required=True)
-    for action in ("prepare", "subjects", "group"):
+    for action in ("prepare", "check", "subjects", "group"):
         p = sub.add_parser(action)
         p.add_argument("--platform", choices=["linux", "windows"], required=True)
         p.add_argument("--afni-dir", type=Path, required=True)
@@ -607,6 +668,9 @@ def main() -> None:
         sys.exit(0 if ok else 1)
     if action == "prepare":
         prepare(config)
+    elif action == "check":
+        if not check(config):
+            sys.exit(1)
     elif action == "subjects":
         failed = [r for r in subjects(config) if r.afni_proc_status or r.proc_status]
         if failed:
