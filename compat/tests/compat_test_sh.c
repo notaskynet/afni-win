@@ -4,6 +4,9 @@
 #include <stdlib.h>
 #include <string.h>
 
+/* Not linked with the layer: this program stands in for an external sh. */
+#undef fopen
+
 /* Stand-in for "sh -c COMMAND" used by test_shell. It understands:
    echo TEXT | exit N | save FILE (stdin to FILE) | dump FILE (FILE to stdout)
    | stderr TEXT. It tests the layer's pipes and status codes, not a shell. */
