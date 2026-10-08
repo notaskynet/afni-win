@@ -79,6 +79,7 @@ if not defined HOME set "HOME=%USERPROFILE%"
 set "AFNI_ALLOW_ARBITRARY_FILENAMES=YES"
 set "LANG=C.UTF-8"
 set "MPLBACKEND=Agg"
+set "PYTHONUTF8=1"
 exit /b 0
 """
 TCSH_CMD = r"""@echo off
