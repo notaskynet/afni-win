@@ -60,3 +60,4 @@ dkms.conf
 # python
 .venv/
 __pycache__/
+!installer/afni-shell.cmd
