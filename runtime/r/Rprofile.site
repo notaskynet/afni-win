@@ -1,0 +1,25 @@
+# afni-win: site profile of the R shipped with AFNI (docs/DECISIONS.md D39).
+#
+# The AFNI R programs call system() with POSIX shell command lines
+# (redirections such as "1> out 2> err", "\rm -f ...", "3dinfo ..."), as on
+# Linux. R on Windows runs system() commands without a shell. When the MSYS2
+# shell of the afni-win installation exists (<root>/msys/usr/bin/sh.exe, R is
+# <root>/R), an environment attached to the search path provides a system()
+# that runs the command with "sh -c"; it shadows base::system for code that
+# calls system() unqualified, such as AFNIio.R. Other R code is unaffected.
+local({
+  sh <- normalizePath(file.path(R.home(), "..", "msys", "usr", "bin", "sh.exe"),
+                      winslash = "/", mustWork = FALSE)
+  if (.Platform$OS.type == "windows" && file.exists(sh)) {
+    afni_win <- new.env()
+    afni_win$system <- function(command, intern = FALSE, ignore.stdout = FALSE,
+                                ignore.stderr = FALSE, wait = TRUE, input = NULL, ...) {
+      out <- if (intern) TRUE else if (ignore.stdout) FALSE else ""
+      err <- if (ignore.stderr) FALSE else ""
+      status <- base::system2(sh, c("-c", shQuote(command, type = "cmd")),
+                              stdout = out, stderr = err, wait = wait, input = input)
+      if (intern) status else invisible(status)
+    }
+    attach(afni_win, name = "afni-win:system", warn.conflicts = FALSE)
+  }
+})

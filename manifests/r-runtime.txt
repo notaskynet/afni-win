@@ -1,0 +1,15 @@
+# R shipped with afni-win for the AFNI R programs (docs/DECISIONS.md D39).
+# tools/r_runtime.py installs the CRAN R for Windows build (checked by
+# sha256) and the CRAN packages below as Windows binaries from a dated
+# Posit Package Manager snapshot, so that every build gets the same versions.
+# Packages: what the R programs load (3dMVM, 3dLME, 3dLMEr, 3dISC, 3dICC,
+# 3dMEMA, 3dMSS, 3dGLMM) and the 'ALL' set of rPkgsInstall.R without brms
+# (Bayesian RBA/MBA need Stan and a compiler; not shipped).
+#
+# <key> <value...>
+version 4.6.1
+installer https://cloud.r-project.org/bin/windows/base/R-4.6.1-win.exe
+installer https://cloud.r-project.org/bin/windows/base/old/4.6.1/R-4.6.1-win.exe
+sha256 c5424c40cd70ef85765a55d2ff96bb602b5f30ed536938ff004f14db5db3c2df
+repository https://packagemanager.posit.co/cran/2026-10-01
+packages afex phia snow nlme lme4 lmerTest gamm4 car robustbase contrast MuMIn ROCR blme metafor emmeans glmmTMB data.table paran psych corrplot
