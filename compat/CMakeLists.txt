@@ -42,6 +42,7 @@ add_library(
   src/report.c
   src/shell.c
   src/signal.c
+  src/stdio.c
   src/string.c
   src/sysconf.c
   src/time.c
@@ -99,7 +100,7 @@ if(AFNI_COMPAT_TESTS)
   target_compile_options(compat_test_child PRIVATE "SHELL:-include \"${AFNI_COMPAT_HEADER}\"" ${AFNI_COMPAT_WARNINGS})
   target_link_libraries(compat_test_child PRIVATE afni_compat)
 
-  foreach(name codepage dl env fs init mman net process rand48 shell signal string sysinfo time users)
+  foreach(name codepage dl env fs init mman net process rand48 shell signal stdio string sysinfo time users)
     add_executable(test_${name} tests/test_${name}.c)
     set_target_properties(test_${name} PROPERTIES C_STANDARD 11 C_STANDARD_REQUIRED ON C_EXTENSIONS OFF)
     target_compile_options(test_${name} PRIVATE "SHELL:-include \"${AFNI_COMPAT_HEADER}\"" ${AFNI_COMPAT_WARNINGS})
