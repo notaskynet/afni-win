@@ -10,6 +10,8 @@ Upstream: `AFNI_26.2.09`. Decisions referenced as D*n* are in `docs/DECISIONS.md
 | CI, `windows-latest` + MSYS2 UCRT64 | Compat unit tests (with the pinned busybox), build of all required and optional programs, package, installer build + silent install/run/uninstall, regression scenario run from the package with `PATH` limited to the package and the Windows system directories. |
 | CI, `ubuntu-24.04` | Official upstream CMake build (D28), same scenario, comparison with tolerances (D29), POSIX call-site report. |
 
+Result of the last CI run on this branch (run 37717014250, commit `fc7c4e2`): all jobs green. Compat unit tests 15/15, required programs 53/53, installer built and its install/run/uninstall test passed, scenario from the package passed, Linux comparison 266 files with 0 beyond tolerance.
+
 ## 2. Phase 2 - compatibility layer
 
 | Group | Result |
@@ -32,7 +34,7 @@ Unit tests: 15 programs in `compat/tests/`, all passing on `windows-latest`. `ma
 | 0009 | `3dDeconvolve`, `3dDeconvolve_f` and an X-free `coxplot` without `COMP_GUI` (D26) |
 | 0010 | `3dttest++ -Clustsim` jobs without `fork` (D27) |
 
-All 10 patches apply with `git apply --3way` to the tag. Required programs: **53 of 53** build. Optional programs: built except `rmz` (needs `sync`, which cannot be implemented honestly: a no-op would defeat its purpose), `mpeg_encode` (legacy code expecting `times.h`, `u_long`), `3dECM` (fails only in CI; the build now logs the compiler error) and 8 programs that upstream CMake defines only with `COMP_GUI` (`3dExchange 3dNLfim 3dmaxima Vecwarp adwarp afni_vcheck imreg`) or that `cmake/gifti` does not build (`gifti_tool`). The 29 NLfit model libraries are built (`manifests/models-optional.txt`).
+All 10 patches apply with `git apply --3way` to the tag. Required programs: **53 of 53** build. Optional programs: built except `dcm2niix_afni` until the last run (fixed by the one-argument `mkdir`; not yet confirmed in CI), `rmz` (needs `sync`, which cannot be implemented honestly: a no-op would defeat its purpose), `mpeg_encode` (legacy code expecting `times.h`, `u_long`), `3dECM` (fails only in CI, not in the local cross build; `tools.build` now writes the compiler error to the CI log) and 8 programs that upstream CMake defines only with `COMP_GUI` (`3dExchange 3dNLfim 3dmaxima Vecwarp adwarp afni_vcheck imreg`) or that `cmake/gifti` does not build (`gifti_tool`). The 29 NLfit model libraries are built (`manifests/models-optional.txt`).
 
 ## 4. Phase 4 - CI
 
