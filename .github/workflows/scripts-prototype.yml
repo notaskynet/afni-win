@@ -1,0 +1,208 @@
+name: scripts-prototype
+
+# Research prototype for the AFNI scripting layer (strategy A in
+# docs/inventory/scripts-REPORT.md): the same afni_proc.py pipeline on the
+# official Linux CMake build and on the Windows build, with tcsh and the POSIX
+# utilities from MSYS2 and the AFNI programs native. Measures process start
+# cost and pipeline time, records what fails, and compares the results.
+# Not part of the release path.
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [claude/scripts-research]
+    paths:
+      - tests/scripts/**
+      - cmake/**
+      - tools/build.py
+      - .github/workflows/scripts-prototype.yml
+
+permissions:
+  contents: read
+
+env:
+  AFNI_UPSTREAM: https://github.com/afni/afni.git
+  BUSYBOX_URL: https://frippery.org/files/busybox/busybox-w64u-FRP-6075-g169694ebd.exe
+  BUSYBOX_FALLBACK_URL: https://frippery.org/files/busybox/busybox64u.exe
+  BUSYBOX_SHA256: 6e263d154d8548d1eb936f65d1d8312c80df31c45974e48d6335e4dcc0f4f34c
+  EXTRA_PROGRAMS: count_afni whereami_afni p2dsetstat
+  OMP_NUM_THREADS: '1'
+  AFNI_RANDOM_SEEDVAL: '31416'
+  BENCH_N: '200'
+
+jobs:
+  linux:
+    runs-on: ubuntu-24.04
+    outputs:
+      tag: ${{ steps.tag.outputs.tag }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - id: tag
+        run: echo "tag=$(cat manifests/upstream-baseline.txt)" >> "$GITHUB_OUTPUT"
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ninja-build zlib1g-dev libexpat1-dev libqhull-dev libjpeg-dev \
+            libmotif-dev libxt-dev libxmu-dev libxpm-dev libxi-dev libjpeg-progs \
+            freeglut3-dev libglu1-mesa-dev libglw1-mesa-dev libgsl-dev \
+            tcsh python3-numpy python3-matplotlib
+
+      - name: Build the pipeline programs with the official CMake build
+        env:
+          CC: gcc
+          CXX: g++
+        run: |
+          git -c advice.detachedHead=false clone --depth 1 --branch "${{ steps.tag.outputs.tag }}" \
+            "$AFNI_UPSTREAM" upstream
+          cmake -S upstream -B build-linux -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release -DCOMP_GUI=ON -DCOMP_SUMA=ON \
+            -DCOMP_PYTHON=OFF -DCOMP_TCSH=OFF -DREMOVE_BUILD_PARITY_CHECKS=ON -DUSE_OMP=ON \
+            -DFETCHCONTENT_SOURCE_DIR_NIFTI_CLIB="$PWD/upstream/src/nifti" \
+            -DFETCHCONTENT_SOURCE_DIR_GIFTI_CLIB="$PWD/cmake/gifti" \
+            -DCMAKE_PROJECT_AFNI_INCLUDE="$PWD/cmake/afni-extra-programs.cmake" \
+            "-DAFNI_WIN_EXTRA_PROGRAMS=${EXTRA_PROGRAMS// /;}"
+          mapfile -t targets < <(grep -v '^#' tests/scripts/ap-programs.txt)
+          cmake --build build-linux --target "${targets[@]}" $EXTRA_PROGRAMS 3dSkullStrip
+
+      - name: Assemble programs and scripts
+        run: bash tests/scripts/assemble.sh upstream build-linux/targets_built afni-bin
+
+      - name: Fetch data and prepare the shared inputs
+        run: |
+          bash tests/scripts/fetch_data.sh data
+          export PATH="$PWD/afni-bin:$PATH"
+          mkdir inputs
+          3dSkullStrip -input data/sub-08_T1w.nii.gz -prefix inputs/anat_ss.nii.gz
+          3dcalc -a data/tpl-MNI152NLin2009cAsym_res-01_T1w.nii.gz \
+            -b data/tpl-MNI152NLin2009cAsym_res-01_desc-brain_mask.nii.gz \
+            -expr 'a*step(b)' -prefix inputs/MNI_brain.nii.gz
+          3drefit -space MNI -view tlrc inputs/MNI_brain.nii.gz
+
+      - name: Process start cost
+        run: |
+          export PATH="$PWD/afni-bin:$PATH" PYTHONPATH="$PWD/afni-bin"
+          mkdir -p results/linux && cd results/linux
+          tcsh ../../tests/scripts/bench_spawn.tcsh "$BENCH_N" | tee bench.txt
+
+      - name: Run the pipeline
+        run: |
+          export PATH="$PWD/afni-bin:$PATH" PYTHONPATH="$PWD/afni-bin"
+          bash tests/scripts/run_pipeline.sh "$PWD/data" "$PWD/inputs" "$PWD/work" "$PWD/results/linux"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: prototype-inputs
+          path: inputs
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: prototype-linux
+          path: results/linux
+
+  windows:
+    needs: linux
+    runs-on: windows-latest
+    env:
+      AFNI_TAG: ${{ needs.linux.outputs.tag }}
+    defaults:
+      run:
+        shell: msys2 {0}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: msys2/setup-msys2@v2
+        with:
+          msystem: UCRT64
+          update: true
+          install: git make tcsh
+          pacboy: >-
+            gcc:p cmake:p ninja:p zlib:p expat:p qhull:p libjpeg-turbo:p
+            python:p python-pydantic:p python-numpy:p python-matplotlib:p
+
+      - name: Record versions
+        run: |
+          pacman -Q tcsh coreutils sed grep gawk msys2-runtime mingw-w64-ucrt-x86_64-python \
+            mingw-w64-ucrt-x86_64-python-numpy mingw-w64-ucrt-x86_64-python-matplotlib
+          powershell -Command "Get-MpComputerStatus | Select-Object RealTimeProtectionEnabled, AMRunningMode" || true
+
+      - name: Fetch busybox-w32 (pinned by sha256)
+        run: |
+          curl -fsSL -o busybox64u.exe "$BUSYBOX_URL" || curl -fsSL -o busybox64u.exe "$BUSYBOX_FALLBACK_URL"
+          echo "$BUSYBOX_SHA256  busybox64u.exe" | sha256sum -c -
+
+      - name: Build the pipeline programs
+        run: |
+          extra=()
+          for p in $EXTRA_PROGRAMS; do extra+=(--extra-program "$p"); done
+          python -m tools.build --tag "$AFNI_TAG" --upstream-url "$AFNI_UPSTREAM" \
+            --work-dir build-win --optional-manifest tests/scripts/ap-programs.txt "${extra[@]}" || true
+          python -c "import json; r = json.load(open('build-win/build-result.json')); print('optional missing:', r['optional_missing'], 'undefined:', r['optional_undefined'])"
+
+      - name: Package and assemble programs and scripts
+        run: |
+          python -m tools.package --build-dir build-win --source-dir build-win/upstream \
+            --runtime-dir "$(cygpath -w /ucrt64/bin)" --busybox busybox64u.exe --output-dir dist
+          bash tests/scripts/assemble.sh build-win/upstream "dist/afni-$AFNI_TAG-win64" afni-bin
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: prototype-inputs
+          path: inputs
+
+      - name: Fetch data
+        run: bash tests/scripts/fetch_data.sh data
+
+      - name: Process start cost
+        run: |
+          export PATH="$PWD/afni-bin:$PATH" PYTHONPATH="$(cygpath -w "$PWD/afni-bin")"
+          mkdir -p results/windows && cd results/windows
+          tcsh ../../tests/scripts/bench_spawn.tcsh "$BENCH_N" | tee bench.txt
+
+      - name: Run the pipeline
+        run: |
+          export PATH="$PWD/afni-bin:$PATH" PYTHONPATH="$(cygpath -w "$PWD/afni-bin")"
+          bash tests/scripts/run_pipeline.sh "$PWD/data" "$PWD/inputs" "$PWD/work" "$PWD/results/windows"
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: prototype-windows
+          path: results/windows
+
+  compare:
+    needs: [linux, windows]
+    if: always() && needs.linux.result == 'success'
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: prototype-*
+      - name: Compare and summarise
+        run: |
+          {
+            echo "## Process start cost (ms per call)"
+            echo
+            echo "| What | Linux | Windows |"
+            echo "|---|---|---|"
+            join <(sort prototype-linux/bench.txt) <(sort prototype-windows/bench.txt 2>/dev/null) \
+              | awk '{ printf "| %s | %s | %s |\n", $1, $3, $5 }'
+            echo
+            echo "## Pipeline"
+            echo
+            echo "| | Linux | Windows |"
+            echo "|---|---|---|"
+            for f in status seconds; do
+              echo "| $f | $(cat prototype-linux/$f.txt) | $(cat prototype-windows/$f.txt 2>/dev/null) |"
+            done
+            echo
+          } >> "$GITHUB_STEP_SUMMARY"
+          if [ -d prototype-windows/outputs ]; then
+            uv run --frozen python -m tests.regression.compare --reference prototype-linux/outputs \
+              --candidate prototype-windows/outputs --report comparison.md || true
+            cat comparison.md >> "$GITHUB_STEP_SUMMARY"
+          fi
