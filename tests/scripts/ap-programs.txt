@@ -1,0 +1,51 @@
+# AFNI C programs that the prototype afni_proc.py pipeline runs (from an
+# execve trace of the pipeline on Linux; the afni GUI, 1dplot and
+# 3dSkullStrip are GUI/SUMA builds, the Makefile-only programs are in
+# EXTRA_PROGRAMS of scripts-prototype.yml).
+1dcat
+1deval
+3dABoverlap
+3dAllineate
+3dAttribute
+3dAutomask
+3dBrickStat
+3dClustSim
+3dClusterize
+3dDeconvolve
+3dDepthMap
+3dExtrema
+3dFWHMx
+3dLocalstat
+3dMean
+3dNotes
+3dRank
+3dTcat
+3dTcorr1D
+3dTcorrelate
+3dTnorm
+3dToutcount
+3dTproject
+3dTshift
+3dTstat
+3dTto1D
+3dWarp
+3dWarpDrive
+3dZeropad
+3dbucket
+3dcalc
+3dcopy
+3ddot
+3dinfo
+3dmask_tool
+3dmaskave
+3dmerge
+3dnvals
+3drefit
+3drename
+3dresample
+3dvolreg
+afni_history
+apsearch
+cat_matvec
+ccalc
+file_tool
