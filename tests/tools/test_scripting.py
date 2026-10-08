@@ -13,6 +13,7 @@ from tools.scripting import (
     read_manifest,
     script_interpreter,
     shebang_flags,
+    sources_text,
     target_path,
 )
 
@@ -39,6 +40,7 @@ def test_read_manifest(tmp_path: Path) -> None:
         ("/ucrt64/lib/python3.14/test/test_os.py", False),
         ("/ucrt64/lib/python3.14/os.py", True),
         ("/usr/share/perl5/core_perl/POSIX.pm", True),
+        ("/usr/share/licenses/tcsh/LICENSE", True),
     ],
 )
 def test_keep_file(path: str, kept: bool) -> None:
@@ -125,3 +127,12 @@ def test_install_scripts_writes_launchers(tmp_path: Path) -> None:
     ]
     assert (result.scripts, result.launchers) == (5, 3)
     assert " -f " in (package / "3dMVM.cmd").read_text()
+
+
+def test_sources_text_lists_packages_and_r() -> None:
+    """Every bundled package version and the R source are named, CRLF ends."""
+    text = sources_text({"tcsh": "6.24.16-1", "bash": "5.2-1"}, "4.6.1", "https://p/cran/d")
+    assert "  bash 5.2-1\r\n  tcsh 6.24.16-1\r\n" in text
+    assert "https://cran.r-project.org/src/base/R-4/R-4.6.1.tar.gz" in text
+    assert "\n" not in text.replace("\r\n", "")
+    assert "R/ is R" not in sources_text({}, None, None)

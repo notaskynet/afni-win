@@ -11,7 +11,10 @@ Runs inside MSYS2 after ``tools.package`` has assembled the programs. It adds:
 - ``R/``: the R installed by ``tools.r_runtime`` (with its CRAN packages), and
   ``scripts/R_io.so`` for ``AFNIio.R``;
 - ``afni-env.cmd``, ``afni-tcsh.cmd``, ``tcsh.cmd`` and one ``<script>.cmd``
-  launcher per script, so that scripts also start from ``cmd.exe``.
+  launcher per script, so that scripts also start from ``cmd.exe``;
+- ``SOURCES.txt``: every bundled MSYS2 package with its version and where its
+  source code is published (the licence texts are part of the copied
+  packages, ``share/licenses``).
 
 Package files come from ``pacman -Qlq``; dependencies from ``pactree -lu``.
 """
@@ -26,6 +29,9 @@ import sys
 from pathlib import Path, PurePosixPath
 
 from pydantic import BaseModel, Field
+
+from tools.r_runtime import DEFAULT_MANIFEST as R_MANIFEST
+from tools.r_runtime import read_manifest as read_r_manifest
 
 logger = logging.getLogger(__name__)
 
@@ -88,6 +94,48 @@ call "%~dp0afni-env.cmd" || (pause & exit /b 1)
 echo AFNI shell (tcsh). AFNI programs and scripts are on the PATH; type "exit" to leave.
 "%AFNI_ROOT%\msys\usr\bin\tcsh.exe"
 """
+
+
+SOURCES_HEADER = """Sources of the AFNI scripting runtime bundled by afni-win
+=======================================================
+
+msys/ and python/ hold unmodified binary packages of MSYS2
+(https://www.msys2.org/). Their licences are in msys/usr/share/licenses and
+python/share/licenses. The source code of every package version below,
+with the build recipe (PKGBUILD), is published by MSYS2:
+
+  msys/ packages:    https://repo.msys2.org/msys/sources/
+                     https://github.com/msys2/MSYS2-packages
+  python/ packages:  https://repo.msys2.org/mingw/sources/
+                     https://github.com/msys2/MINGW-packages
+
+On request we provide the same source code; see the afni-win issue tracker
+(https://github.com/notaskynet/afni-win/issues).
+"""
+
+
+def sources_text(packages: dict[str, str], r_version: str | None, r_repository: str | None) -> str:
+    """Write ``SOURCES.txt``.
+
+    Args:
+        packages: Bundled MSYS2 packages and versions.
+        r_version: Version of the bundled R, or None without R.
+        r_repository: CRAN snapshot of the bundled R packages, or None.
+
+    Returns:
+        Text with CRLF line ends.
+    """
+    lines = [SOURCES_HEADER, "Packages:", ""]
+    lines += [f"  {name} {version}" for name, version in sorted(packages.items())]
+    if r_version is not None:
+        lines += [
+            "",
+            f"R/ is R {r_version} for Windows from CRAN (GPL-2 | GPL-3, R/COPYING); source:",
+            f"  https://cran.r-project.org/src/base/R-{r_version[0]}/R-{r_version}.tar.gz",
+            f"Its added CRAN packages come from the snapshot {r_repository}",
+            "(sources in the same repository, src/contrib).",
+        ]
+    return "\r\n".join("\n".join(lines).splitlines()) + "\r\n"
 
 
 class ScriptingConfig(BaseModel):
@@ -371,6 +419,14 @@ def assemble(config: ScriptingConfig) -> ScriptingResult:
         shutil.copytree(config.r_home, config.package_dir / "R")
     if config.r_io is not None:
         shutil.copy2(config.r_io, config.package_dir / "scripts" / config.r_io.name)
+    r_manifest = read_r_manifest(R_MANIFEST) if config.r_home is not None else None
+    (config.package_dir / "SOURCES.txt").write_bytes(
+        sources_text(
+            result.packages,
+            r_manifest.version if r_manifest else None,
+            r_manifest.repository if r_manifest else None,
+        ).encode()
+    )
     etc = config.package_dir / "msys" / "etc"
     etc.mkdir(parents=True, exist_ok=True)
     (etc / "fstab").write_text(FSTAB)

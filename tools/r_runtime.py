@@ -6,6 +6,11 @@ silently into the target directory, installs the listed CRAN packages as
 Windows binaries from the pinned repository snapshot into its library, adds
 the afni-win site profile (``runtime/r/Rprofile.site``) and writes
 ``r-runtime.json`` with the versions. Runs on Windows.
+
+With ``--linux-codename`` it installs only the packages, into the library of
+the ``Rscript`` on PATH, from the Linux binaries of the same snapshot; the
+Linux reference of the acceptance pipeline uses that (D40). The R version
+must be the one of the manifest.
 """
 
 import argparse
@@ -90,25 +95,119 @@ def r_vector(values: list[str]) -> str:
     return "c(" + ", ".join(f'"{v}"' for v in values) + ")"
 
 
-def install_script(repository: str, packages: list[str], library: str) -> str:
+def linux_repository(repository: str, codename: str) -> str:
+    """Address of the Linux binaries of a Posit Package Manager snapshot.
+
+    Args:
+        repository: Snapshot URL such as ``https://host/cran/2026-10-01``.
+        codename: Distribution codename such as ``noble``.
+
+    Returns:
+        URL such as ``https://host/cran/__linux__/noble/2026-10-01``.
+
+    Raises:
+        ValueError: If the URL has no ``/cran/`` part.
+    """
+    head, sep, snapshot = repository.partition("/cran/")
+    if not sep:
+        raise ValueError(f"not a Package Manager CRAN snapshot: {repository}")
+    return f"{head}/cran/__linux__/{codename}/{snapshot}"
+
+
+def install_script(
+    repository: str, packages: list[str], library: str | None, binary: bool = True
+) -> str:
     """Write the R code that installs the packages.
 
     Args:
         repository: CRAN-like repository URL (snapshot).
         packages: Package names.
-        library: Library directory (forward slashes).
+        library: Library directory (forward slashes), or None for the first
+            library of ``.libPaths()``.
+        binary: Ask for Windows binaries (``type = "binary"``). Linux
+            binaries of Package Manager are served as ``type = "source"`` to
+            an R that sends its version in the HTTP user agent.
 
     Returns:
         R expression for ``Rscript -e``; it fails if any package is missing
         afterwards.
     """
+    lib = f'"{library}"' if library is not None else ".libPaths()[1]"
+    if binary:
+        prefix, kind = "", ', type = "binary"'
+    else:
+        prefix = (
+            'options(HTTPUserAgent = sprintf("R/%s R (%s)", getRversion(), '
+            'paste(getRversion(), R.version["platform"], R.version["arch"], R.version["os"]))); '
+        )
+        kind = ""
     return (
-        f"pkgs <- {r_vector(packages)}; "
-        f'install.packages(pkgs, lib = "{library}", repos = "{repository}", type = "binary"); '
-        f'missing <- pkgs[!vapply(pkgs, requireNamespace, logical(1), lib.loc = "{library}", '
+        f"{prefix}pkgs <- {r_vector(packages)}; lib <- {lib}; "
+        f'install.packages(pkgs, lib = lib, repos = "{repository}"{kind}); '
+        "missing <- pkgs[!vapply(pkgs, requireNamespace, logical(1), lib.loc = lib, "
         "quietly = TRUE)]; "
         'if (length(missing)) stop("not installed: ", paste(missing, collapse = " "))'
     )
+
+
+def version_query(packages: list[str]) -> str:
+    """Write the R code that prints R's and the packages' versions.
+
+    Args:
+        packages: Package names.
+
+    Returns:
+        R expression printing ``<name> <version>`` lines, R first.
+    """
+    return (
+        f"pkgs <- {r_vector(packages)}; "
+        'v <- vapply(pkgs, function(p) as.character(packageVersion(p)), ""); '
+        'cat(paste("R", getRversion()), paste(pkgs, v), sep = "\\n")'
+    )
+
+
+def _versions(rscript: str, packages: list[str]) -> dict[str, str]:
+    """Ask an R installation for its versions.
+
+    Args:
+        rscript: ``Rscript`` executable.
+        packages: Package names.
+
+    Returns:
+        Versions of R and of each package.
+    """
+    output = subprocess.run(
+        [rscript, "-e", version_query(packages)], check=True, capture_output=True, text=True
+    ).stdout
+    versions: dict[str, str] = {}
+    for line in output.splitlines():
+        name, _, version = line.partition(" ")
+        if version:
+            versions[name] = version
+    return versions
+
+
+def install_linux_packages(manifest_path: Path, codename: str) -> dict[str, str]:
+    """Install the manifest packages into the R on PATH (Linux reference).
+
+    Args:
+        manifest_path: R runtime manifest.
+        codename: Distribution codename of the Package Manager binaries.
+
+    Returns:
+        Versions of R and of each package.
+
+    Raises:
+        ValueError: If the R on PATH is not the manifest version.
+    """
+    manifest = read_manifest(manifest_path)
+    found = _versions("Rscript", [])["R"]
+    if found != manifest.version:
+        raise ValueError(f"R {found} on PATH, manifest pins {manifest.version}")
+    repository = linux_repository(manifest.repository, codename)
+    script = install_script(repository, manifest.packages, None, binary=False)
+    subprocess.run(["Rscript", "-e", script], check=True)
+    return _versions("Rscript", manifest.packages)
 
 
 def _download(manifest: RManifest, directory: Path) -> Path:
@@ -178,20 +277,7 @@ def install(config: RConfig) -> dict[str, str]:
     )
     profile = config.r_home / "etc" / "Rprofile.site"
     profile.write_text(profile.read_text() + "\n" + SITE_PROFILE.read_text())
-    query = (
-        f"pkgs <- {r_vector(manifest.packages)}; "
-        'v <- vapply(pkgs, function(p) as.character(packageVersion(p)), ""); '
-        'cat(paste(pkgs, v), sep = "\\n")'
-    )
-    output = subprocess.run(
-        [str(rscript), "-e", query], check=True, capture_output=True, text=True
-    ).stdout
-    versions = {"R": manifest.version}
-    for line in output.splitlines():
-        name, _, version = line.partition(" ")
-        if version:
-            versions[name] = version
-    return versions
+    return _versions(str(rscript), manifest.packages)
 
 
 def main() -> None:
@@ -199,15 +285,25 @@ def main() -> None:
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--manifest", type=Path, default=DEFAULT_MANIFEST)
-    parser.add_argument("--r-home", type=Path, required=True)
+    parser.add_argument("--r-home", type=Path)
     parser.add_argument("--download-dir", type=Path, required=True)
-    config = RConfig(**vars(parser.parse_args()))
+    parser.add_argument("--linux-codename")
+    args = parser.parse_args()
     try:
-        versions = install(config)
+        if args.linux_codename:
+            versions = install_linux_packages(args.manifest, args.linux_codename)
+        else:
+            if args.r_home is None:
+                parser.error("--r-home is required unless --linux-codename is given")
+            config = RConfig(
+                manifest=args.manifest, r_home=args.r_home, download_dir=args.download_dir
+            )
+            versions = install(config)
     except (ValueError, OSError, subprocess.CalledProcessError) as error:
         logger.error("%s", error)
         sys.exit(1)
-    (config.download_dir / "r-runtime.json").write_text(json.dumps(versions, indent=2))
+    args.download_dir.mkdir(parents=True, exist_ok=True)
+    (args.download_dir / "r-runtime.json").write_text(json.dumps(versions, indent=2))
     logger.info("R %s with %d packages", versions["R"], len(versions) - 1)
 
 
