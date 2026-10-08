@@ -228,6 +228,24 @@ def _defined_targets(build_dir: Path) -> set[str]:
     return {line.split(":", 1)[0] for line in result.stdout.splitlines() if ":" in line}
 
 
+def _log_failures(log: str, lines_per_failure: int = 6) -> None:
+    """Log the first error lines of every failed build edge.
+
+    Args:
+        log: Ninja output.
+        lines_per_failure: Lines logged after each ``FAILED:`` line.
+    """
+    lines = log.splitlines()
+    for index, line in enumerate(lines):
+        if line.startswith("FAILED:"):
+            context = [
+                text
+                for text in lines[index + 1 : index + 40]
+                if "error" in text or "undefined reference" in text
+            ][:lines_per_failure]
+            logger.warning("%s\n%s", line, "\n".join(context))
+
+
 def build(config: BuildConfig, build_dir: Path, targets: list[str]) -> tuple[list[str], list[str]]:
     """Build the given targets, continuing past failures.
 
@@ -253,6 +271,7 @@ def build(config: BuildConfig, build_dir: Path, targets: list[str]) -> tuple[lis
     logger.info("$ %s", " ".join(cmd))
     result = subprocess.run(cmd, text=True, capture_output=True)
     (build_dir / "build.log").write_text(result.stdout + result.stderr)
+    _log_failures(result.stdout + result.stderr)
     output = build_dir / "targets_built"
     built = [
         t for t in targets if (output / f"{t}.exe").exists() or (output / f"lib{t}.dll").exists()
