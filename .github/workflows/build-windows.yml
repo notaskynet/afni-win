@@ -25,6 +25,13 @@ on:
           running the Linux pipeline again (same tag; not with publish)
         required: false
         default: ''
+      package_run:
+        description: >-
+          Reuse the Linux reference, Windows package and regression results of
+          this earlier run ID and run only the Windows pipeline (needs
+          reference_run; not with publish)
+        required: false
+        default: ''
   push:
     branches: [main]
     paths:
@@ -65,6 +72,7 @@ jobs:
           uv run --frozen pytest -q tests
 
   linux-reference:
+    if: ${{ !inputs.package_run }}
     runs-on: ubuntu-24.04
     outputs:
       tag: ${{ steps.tag.outputs.tag }}
@@ -235,6 +243,7 @@ jobs:
 
   windows:
     needs: linux-reference
+    if: ${{ !inputs.package_run }}
     runs-on: windows-latest
     env:
       AFNI_TAG: ${{ needs.linux-reference.outputs.tag }}
@@ -395,7 +404,13 @@ jobs:
   # through tcsh.cmd, the group analysis inside the AFNI shell.
   pipeline-windows:
     needs: [linux-reference, windows]
+    if: >-
+      ${{ !cancelled() && (needs.windows.result == 'success'
+      || (inputs.package_run && inputs.reference_run && needs.windows.result == 'skipped')) }}
     runs-on: windows-latest
+    permissions:
+      contents: read
+      actions: read
     env:
       AFNI_TAG: ${{ needs.linux-reference.outputs.tag }}
       OMP_NUM_THREADS: '1'
@@ -410,6 +425,8 @@ jobs:
         with:
           name: package
           path: dist
+          run-id: ${{ inputs.package_run || github.run_id }}
+          github-token: ${{ github.token }}
 
       - name: Install the package
         run: |
@@ -444,14 +461,15 @@ jobs:
   compare:
     needs: [linux-reference, windows, pipeline-linux, pipeline-windows]
     if: >-
-      ${{ !cancelled() && needs.windows.result == 'success' && needs.pipeline-windows.result == 'success'
+      ${{ !cancelled() && needs.pipeline-windows.result == 'success'
+      && (needs.windows.result == 'success' || (inputs.package_run && needs.windows.result == 'skipped'))
       && (needs.pipeline-linux.result == 'success' || (inputs.reference_run && needs.pipeline-linux.result == 'skipped')) }}
     runs-on: ubuntu-24.04
     permissions:
       contents: read
       actions: read
     env:
-      AFNI_TAG: ${{ needs.linux-reference.outputs.tag }}
+      AFNI_TAG: ${{ needs.linux-reference.outputs.tag || inputs.tag }}
       GH_TOKEN: ${{ github.token }}
     steps:
       - uses: actions/checkout@v4
@@ -460,16 +478,22 @@ jobs:
         with:
           name: regression-linux
           path: regression/linux
+          run-id: ${{ inputs.package_run || github.run_id }}
+          github-token: ${{ github.token }}
 
       - uses: actions/download-artifact@v4
         with:
           name: regression-windows
           path: regression/windows
+          run-id: ${{ inputs.package_run || github.run_id }}
+          github-token: ${{ github.token }}
 
       - uses: actions/download-artifact@v4
         with:
           name: posix-callsites
           path: posix
+          run-id: ${{ inputs.package_run || github.run_id }}
+          github-token: ${{ github.token }}
 
       - uses: actions/download-artifact@v4
         with:
@@ -487,6 +511,7 @@ jobs:
 
       - name: Report POSIX API changes since the previous release
         run: |
+          AFNI_TAG=${AFNI_TAG:-$(cat manifests/upstream-baseline.txt)}
           gh release list --limit 1000 --json tagName > releases.json
           previous=$(uv run --frozen python -m tools.upstream_tags previous --tag "$AFNI_TAG" --released releases.json)
           if [ -n "$previous" ]; then
@@ -538,7 +563,7 @@ jobs:
 
   release:
     needs: [linux-reference, windows, compare]
-    if: ${{ inputs.publish && !inputs.reference_run }}
+    if: ${{ inputs.publish && !inputs.reference_run && !inputs.package_run }}
     runs-on: ubuntu-24.04
     permissions:
       contents: write
