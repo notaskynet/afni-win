@@ -454,13 +454,14 @@ def _last_digit_unit(token: str) -> float:
     return 10.0 ** (int(exponent or 0) - decimals)
 
 
-def _numbers_close(a: str, b: str, rtol: float) -> tuple[bool, float, float]:
+def _numbers_close(a: str, b: str, rtol: float, atol: float) -> tuple[bool, float, float]:
     """Compare two printed numbers.
 
     Args:
         a: Reference token.
         b: Candidate token.
         rtol: Relative tolerance.
+        atol: Absolute tolerance.
 
     Returns:
         Whether they agree, absolute and relative difference.
@@ -472,11 +473,16 @@ def _numbers_close(a: str, b: str, rtol: float) -> tuple[bool, float, float]:
     scale = max(abs(x), abs(y))
     rel = diff / scale if scale > 0 else 0.0
     unit = max(_last_digit_unit(a), _last_digit_unit(b))
-    return diff <= rtol * scale or diff <= unit * (1 + 1e-9), diff, rel
+    return diff <= atol + rtol * scale or diff <= unit * (1 + 1e-9), diff, rel
 
 
-def _compare_text(name: str, kind: str, ref_raw: bytes, cand_raw: bytes, rtol: float) -> Comparison:
+def _compare_text(
+    name: str, kind: str, ref_raw: bytes, cand_raw: bytes, rtol: float, atol_scale: float = 0.0
+) -> Comparison:
     """Compare two texts: words exactly, numbers within tolerance.
+
+    As for datasets, the absolute tolerance is ``atol_scale`` times the
+    largest finite magnitude among the reference numbers.
 
     Args:
         name: Path relative to the output directory.
@@ -484,6 +490,7 @@ def _compare_text(name: str, kind: str, ref_raw: bytes, cand_raw: bytes, rtol: f
         ref_raw: Reference contents.
         cand_raw: Candidate contents.
         rtol: Relative tolerance for numbers.
+        atol_scale: Absolute tolerance relative to the largest reference number.
 
     Returns:
         Comparison result; notes hold the first differing lines.
@@ -493,6 +500,9 @@ def _compare_text(name: str, kind: str, ref_raw: bytes, cand_raw: bytes, rtol: f
     if ref_lines == cand_lines:
         return Comparison(name=name, kind=kind, status="identical", values=len(ref_lines))
     result = Comparison(name=name, kind=kind, status="within", values=len(ref_lines))
+    magnitudes = [abs(float(t)) for line in ref_lines for t in NUMBER.findall(line)]
+    finite = [m for m in magnitudes if np.isfinite(m)]
+    atol = atol_scale * (max(finite) if finite else 0.0)
     if len(ref_lines) != len(cand_lines):
         result.status = "different"
         result.notes.append(f"{len(ref_lines)} vs {len(cand_lines)} lines")
@@ -507,7 +517,7 @@ def _compare_text(name: str, kind: str, ref_raw: bytes, cand_raw: bytes, rtol: f
                 result.notes.append(f"line {number}: {a!r} != {b!r}")
             continue
         for x, y in zip(ref_tokens, cand_tokens, strict=True):
-            ok, diff, rel = _numbers_close(x, y, rtol)
+            ok, diff, rel = _numbers_close(x, y, rtol, atol)
             if diff > 0:
                 result.different += 1
                 result.max_abs_diff = max(result.max_abs_diff, diff)
@@ -601,12 +611,12 @@ def _compare_present(
     ref_raw = (ref_dir / name).read_bytes()
     cand_raw = (cand_dir / name).read_bytes()
     if name.endswith(".stderr"):
-        result = _compare_text(name, "stderr", ref_raw, cand_raw, text_rtol)
+        result = _compare_text(name, "stderr", ref_raw, cand_raw, text_rtol, tolerance.atol_scale)
         if result.status in FAILING:
             result.status = "informational"
         return result
     if _is_text(name):
-        return _compare_text(name, "text", ref_raw, cand_raw, text_rtol)
+        return _compare_text(name, "text", ref_raw, cand_raw, text_rtol, tolerance.atol_scale)
     same = ref_raw == cand_raw
     return Comparison(name=name, kind="binary", status="identical" if same else "different")
 
@@ -687,8 +697,18 @@ def main() -> None:
     config.report.write_text(render_report(results))
     if config.json_report is not None:
         config.json_report.write_text(json.dumps([r.model_dump() for r in results], indent=2))
-    failed = [r.name for r in results if r.status in FAILING]
-    logger.info("%d compared, %d failed: %s", len(results), len(failed), failed)
+    failed = [r for r in results if r.status in FAILING]
+    for r in failed:
+        logger.error(
+            "%s (%s): %s, max abs %.3g, max rel %.3g; %s",
+            r.name,
+            r.kind,
+            r.status,
+            r.max_abs_diff,
+            r.max_rel_diff,
+            "; ".join(r.notes),
+        )
+    logger.info("%d compared, %d failed: %s", len(results), len(failed), [r.name for r in failed])
     sys.exit(1 if failed else 0)
 
 

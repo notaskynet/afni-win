@@ -51,3 +51,11 @@ def test_blanks_between_numbers_do_not_matter() -> None:
     """Column alignment that changes with the printed width is not a difference."""
     result = _compare_text("x.1D", "text", b"  0.259739  1\n", b"   0.25974  1\n", 1e-4)
     assert result.status == "within"
+
+
+def test_absolute_tolerance_for_near_zero_numbers() -> None:
+    """Near-zero entries next to large ones pass with the absolute tolerance."""
+    ref = b"1.000000 0.000012 15.5\n"
+    cand = b"1.000000 -0.000003 15.5\n"
+    assert _compare_text("m.1D", "text", ref, cand, 1e-2, 0.0).status == "different"
+    assert _compare_text("m.1D", "text", ref, cand, 1e-2, 1e-2).status == "within"
