@@ -48,6 +48,7 @@ GROUP_SCRIPT = HERE / "group.tcsh"
 TEMPLATE = "MNI_brain.nii.gz"
 CLUSTSIM_SUBJECTS: frozenset[str] = frozenset({"08"})
 TIMING_FILE = "timing.json"
+LOG_TAIL_LINES = 40
 PYTHON_VARIABLES: frozenset[str] = frozenset({"PYTHONPATH", "PYTHONHOME", "VIRTUAL_ENV"})
 WINDOWS_DROPPED_VARIABLES: frozenset[str] = PYTHON_VARIABLES | {
     "HOME",
@@ -313,7 +314,27 @@ def _run(
             stdout=out,
             stderr=subprocess.STDOUT,
         )
+    if result.returncode != 0:
+        logger.error(
+            "%s: exit status %d; end of %s:\n%s",
+            cwd.name,
+            result.returncode,
+            log.name,
+            log_tail(log.read_bytes()),
+        )
     return result.returncode
+
+
+def log_tail(raw: bytes) -> str:
+    """Last lines of a log, for the CI output.
+
+    Args:
+        raw: Log contents.
+
+    Returns:
+        The last :data:`LOG_TAIL_LINES` lines, decoded leniently.
+    """
+    return "\n".join(raw.decode("utf-8", "replace").splitlines()[-LOG_TAIL_LINES:])
 
 
 def _copy_outputs(source: Path, target: Path, patterns: list[str]) -> int:

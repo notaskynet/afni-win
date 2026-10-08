@@ -10,6 +10,7 @@ from tests.pipeline.run import (
     afni_proc_args,
     command,
     environment,
+    log_tail,
     output_patterns,
     time_report,
 )
@@ -105,3 +106,11 @@ def test_compare_without_logs_directory(tmp_path: Path) -> None:
         reference=tmp_path / "ref", candidate=tmp_path / "cand", report=tmp_path / "r.md"
     )
     assert [r.status for r in compare(config)] == ["identical"]
+
+
+def test_log_tail_keeps_the_last_lines() -> None:
+    """Only the end of a long log reaches the CI output."""
+    raw = "".join(f"line {i}\n" for i in range(100)).encode()
+    tail = log_tail(raw)
+    assert tail.splitlines()[0] == "line 60" and tail.endswith("line 99")
+    assert log_tail(b"\xff") == "\ufffd"
