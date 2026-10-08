@@ -1,5 +1,5 @@
 # Ubuntu 24.04 packages whose X11, Xt, Motif and OpenGL headers compile
-# SUMA without X (cmake/afni-suma-nox.cmake, docs/DECISIONS.md D35). Build
+# SUMA without X (cmake/afni-nox.cmake, docs/DECISIONS.md D35). Build
 # time only: the headers are not shipped and nothing links to these
 # libraries. tools/x_headers.py downloads, checks and extracts them.
 #

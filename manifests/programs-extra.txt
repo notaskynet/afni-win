@@ -1,0 +1,8 @@
+# Single-file upstream programs that only src/Makefile.INCLUDE builds: upstream
+# CMake has no target for them (cmake/afni-extra-programs.cmake,
+# AFNI_WIN_EXTRA_PROGRAMS). tools.build adds them to every build; those not in
+# a required manifest are optional.
+count_afni      # every afni_proc.py proc script
+whereami_afni   # afni_proc.py proc script
+p2dsetstat      # QC report (APQC), gen_cluster_table
+dsetstat2p      # counterpart of p2dsetstat

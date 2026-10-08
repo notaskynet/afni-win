@@ -1,0 +1,24 @@
+# Programs that the reference afni_proc.py pipeline runs (tests/pipeline,
+# docs/inventory/scripts-REPORT.md section 3) and that are not already in
+# programs-required.txt. Required: the build fails without them. Covered by
+# the pipeline acceptance test, not by the per-program regression scenario.
+3dABoverlap
+3dClusterize
+3dDepthMap
+3dExtrema
+3dRank
+3dTcorr1D
+3dTcorrelate
+3dTto1D
+3dWarp
+3dWarpDrive
+3ddot
+3drename
+afni_history
+apsearch
+file_tool
+1dplot
+3dSkullStrip
+afni
+count_afni
+whereami_afni
