@@ -15,6 +15,7 @@ from tools.scripting import (
     shebang_flags,
     sources_text,
     target_path,
+    unique_packages,
 )
 
 
@@ -136,3 +137,9 @@ def test_sources_text_lists_packages_and_r() -> None:
     assert "https://cran.r-project.org/src/base/R-4/R-4.6.1.tar.gz" in text
     assert "\n" not in text.replace("\r\n", "")
     assert "R/ is R" not in sources_text({}, None, None)
+
+
+def test_virtual_names_do_not_repeat_a_package() -> None:
+    """A virtual name such as 'sh' resolves to bash, which is copied once."""
+    resolved = [("tcsh", "6.24"), ("bash", "5.2"), ("bash", "5.2"), ("ncurses", "6.5")]
+    assert unique_packages(resolved) == {"tcsh": "6.24", "bash": "5.2", "ncurses": "6.5"}

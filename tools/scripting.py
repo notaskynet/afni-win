@@ -296,33 +296,41 @@ def _pacman(*args: str) -> str:
     return subprocess.run(list(args), check=True, capture_output=True, text=True).stdout
 
 
-def _closure(packages: list[str]) -> list[str]:
+def unique_packages(resolved: list[tuple[str, str]]) -> dict[str, str]:
+    """Drop the repeats of a dependency list.
+
+    ``pactree`` also prints virtual names (``sh``), which ``pacman -Q``
+    resolves to the package that provides them (``bash``); copying such a
+    package twice fails on its read-only files.
+
+    Args:
+        resolved: (installed package name, version) per ``pactree`` entry.
+
+    Returns:
+        Version by package name, first occurrence first.
+    """
+    packages: dict[str, str] = {}
+    for name, version in resolved:
+        packages.setdefault(name, version)
+    return packages
+
+
+def _closure(packages: list[str]) -> dict[str, str]:
     """Collect packages and their dependencies.
 
     Args:
         packages: Package names.
 
     Returns:
-        Unique package names, the given ones first.
+        Installed package names (virtual names resolved) and their
+        versions, the given ones first.
     """
-    names: list[str] = []
+    resolved: list[tuple[str, str]] = []
     for package in packages:
         for name in _pacman("pactree", "-lu", package).split():
-            if name not in names:
-                names.append(name)
-    return names
-
-
-def _version(package: str) -> str:
-    """Return the installed version of a package.
-
-    Args:
-        package: Package name.
-
-    Returns:
-        Version string.
-    """
-    return _pacman("pacman", "-Q", package).split()[1]
+            installed, version = _pacman("pacman", "-Q", name).split()[:2]
+            resolved.append((installed, version))
+    return unique_packages(resolved)
 
 
 def _copy_packages(config: ScriptingConfig, result: ScriptingResult) -> None:
@@ -335,7 +343,7 @@ def _copy_packages(config: ScriptingConfig, result: ScriptingResult) -> None:
     entries = read_manifest(config.manifest)
     for tree in TREES:
         wanted = [p for t, p in entries if t == tree]
-        for package in _closure(wanted):
+        for package, version in _closure(wanted).items():
             files = _pacman("pacman", "-Qlq", package).splitlines()
             copied = 0
             for path in files:
@@ -350,7 +358,7 @@ def _copy_packages(config: ScriptingConfig, result: ScriptingResult) -> None:
                 shutil.copy2(source, destination)
                 copied += 1
             if copied:
-                result.packages[package] = _version(package)
+                result.packages[package] = version
 
 
 def _install_python_extras(config: ScriptingConfig, result: ScriptingResult) -> None:
