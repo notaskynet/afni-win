@@ -236,7 +236,10 @@ AFNI_COMPAT_API int kill(pid_t pid, int sig);
 
 #if !defined(AFNI_COMPAT_BUILDING)
 #define signal(sig, handler) afni_compat_signal((sig), (handler))
-#define mkdir(path, mode) afni_compat_mkdir((path), (mode))
+/* mkdir(path, mode) is POSIX; mkdir(path) is the Windows form that upstream
+   C++ code (dcm2niix) uses in its own _WIN32 branches. */
+#define AFNI_COMPAT_MKDIR_SELECT(_1, _2, name, ...) name
+#define mkdir(...) AFNI_COMPAT_MKDIR_SELECT(__VA_ARGS__, afni_compat_mkdir, _mkdir)(__VA_ARGS__)
 #undef popen
 #undef pclose
 #define popen(command, mode) afni_compat_popen((command), (mode))
