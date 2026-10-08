@@ -71,6 +71,17 @@ jobs:
           INPUT_TAG: ${{ inputs.tag }}
         run: echo "tag=${INPUT_TAG:-$(cat manifests/upstream-baseline.txt)}" >> "$GITHUB_OUTPUT"
 
+      - id: r
+        name: Read the pinned R version
+        run: echo "version=$(awk '$1 == "version" {print $2}' manifests/r-runtime.txt)" >> "$GITHUB_OUTPUT"
+
+      # R of the same version as on Windows (manifests/r-runtime.txt), for
+      # R_io.so (cmake/afni-rio.cmake, D39).
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: ${{ steps.r.outputs.version }}
+          use-public-rspm: false
+
       - name: Install build dependencies
         run: |
           sudo apt-get update
@@ -86,7 +97,8 @@ jobs:
       # scripts are not built (out of scope here). NIfTI and GIFTI come from the
       # same in-tree sources as on Windows (docs/DECISIONS.md, D17, D4a). The
       # programs that only src/Makefile.INCLUDE builds are added with
-      # cmake/afni-extra-programs.cmake, as on Windows (D33).
+      # cmake/afni-extra-programs.cmake and R_io.so with cmake/afni-rio.cmake,
+      # as on Windows (D33, D39).
       - name: Build the required programs
         env:
           CC: gcc
@@ -98,11 +110,16 @@ jobs:
             -DCOMP_PYTHON=OFF -DCOMP_TCSH=OFF -DREMOVE_BUILD_PARITY_CHECKS=ON -DUSE_OMP=ON \
             -DFETCHCONTENT_SOURCE_DIR_NIFTI_CLIB="$PWD/upstream/src/nifti" \
             -DFETCHCONTENT_SOURCE_DIR_GIFTI_CLIB="$PWD/cmake/gifti" \
-            -DCMAKE_PROJECT_AFNI_INCLUDE="$PWD/cmake/afni-extra-programs.cmake" \
-            "-DAFNI_WIN_EXTRA_PROGRAMS=$(IFS=';'; echo "${extra[*]}")"
+            -DCMAKE_PROJECT_AFNI_INCLUDE="$PWD/cmake/afni-linux-reference.cmake" \
+            "-DAFNI_WIN_EXTRA_PROGRAMS=$(IFS=';'; echo "${extra[*]}")" \
+            "-DAFNI_WIN_R_HOME=$(Rscript -e 'cat(R.home())')"
           mapfile -t targets < <(cat manifests/programs-required.txt manifests/programs-pipeline.txt \
             | sed 's/#.*//' | awk 'NF {print $1}')
-          cmake --build build-linux --target "${targets[@]}" "${extra[@]}"
+          cmake --build build-linux --target "${targets[@]}" "${extra[@]}" R_io
+
+      # tar keeps the executable bits that artifacts drop.
+      - name: Archive the programs for the pipeline reference
+        run: tar -C build-linux -cf linux-programs.tar targets_built
 
       - uses: astral-sh/setup-uv@v6
 
@@ -132,6 +149,81 @@ jobs:
         with:
           name: posix-callsites
           path: posix-callsites.json
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: linux-programs
+          path: linux-programs.tar
+
+  # Linux reference of the acceptance pipeline (tests/pipeline, D40): the
+  # programs of linux-reference with the upstream scripts and afnipy of the
+  # same tag in one directory, system tcsh and Python, and R with the CRAN
+  # packages of the same snapshot as on Windows.
+  pipeline-linux:
+    needs: linux-reference
+    runs-on: ubuntu-24.04
+    env:
+      AFNI_TAG: ${{ needs.linux-reference.outputs.tag }}
+      OMP_NUM_THREADS: '1'
+      AFNI_RANDOM_SEEDVAL: '31416'
+    steps:
+      - uses: actions/checkout@v4
+
+      - id: r
+        name: Read the pinned R version
+        run: echo "version=$(awk '$1 == "version" {print $2}' manifests/r-runtime.txt)" >> "$GITHUB_OUTPUT"
+
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: ${{ steps.r.outputs.version }}
+          use-public-rspm: false
+
+      - name: Install runtime dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y zlib1g-dev libexpat1-dev libqhull-dev libjpeg-dev \
+            libmotif-dev libxt-dev libxmu-dev libxpm-dev libxi-dev libjpeg-progs \
+            freeglut3-dev libglu1-mesa-dev libglw1-mesa-dev libgsl-dev libglib2.0-dev \
+            tcsh python-is-python3 python3-numpy python3-matplotlib netpbm
+
+      - uses: astral-sh/setup-uv@v6
+
+      - name: Install the R packages
+        run: uv run --frozen python -m tools.r_runtime --linux-codename noble --download-dir r-linux
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: linux-programs
+
+      - name: Assemble programs, scripts and afnipy
+        run: |
+          git -c advice.detachedHead=false clone --depth 1 --branch "$AFNI_TAG" "$AFNI_UPSTREAM" upstream
+          tar -xf linux-programs.tar
+          mkdir afni-bin
+          cp -a targets_built/. afni-bin/
+          find upstream/src/scripts_install upstream/src/python_scripts/scripts upstream/src/scripts_for_r \
+            upstream/src/R_scripts -maxdepth 1 -type f ! -name CMakeLists.txt -exec cp -p {} afni-bin/ \;
+          cp -r upstream/src/python_scripts/afnipy afni-bin/afnipy
+          echo "LD_LIBRARY_PATH=$PWD/afni-bin" >> "$GITHUB_ENV"
+
+      - name: Fetch the data
+        run: uv run --frozen python -m tests.pipeline.data --data-dir pipeline/data
+
+      - name: Run the subjects and the group analysis
+        run: |
+          args=(--platform linux --afni-dir "$PWD/afni-bin" --data-dir pipeline/data
+            --work-dir pipeline/work --results-dir results)
+          uv run --frozen python -m tests.pipeline.run prepare "${args[@]}"
+          uv run --frozen python -m tests.pipeline.run subjects "${args[@]}"
+          uv run --frozen python -m tests.pipeline.run group "${args[@]}"
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: pipeline-linux
+          path: |
+            results
+            r-linux/r-runtime.json
 
   windows:
     needs: linux-reference
@@ -289,8 +381,60 @@ jobs:
             build-win/build/CMakeCache.txt
             msys2-packages.txt
 
-  compare:
+  # Acceptance pipeline from the installed package (tests/pipeline, D40):
+  # the data and work directories are under a Cyrillic folder name;
+  # afni_proc.py starts from cmd.exe through its launcher, the proc scripts
+  # through tcsh.cmd, the group analysis inside the AFNI shell.
+  pipeline-windows:
     needs: [linux-reference, windows]
+    runs-on: windows-latest
+    env:
+      AFNI_TAG: ${{ needs.linux-reference.outputs.tag }}
+      OMP_NUM_THREADS: '1'
+      AFNI_RANDOM_SEEDVAL: '31416'
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: package
+          path: dist
+
+      - name: Install the package
+        run: |
+          $dir = "$env:RUNNER_TEMP\AFNI"
+          $setup = Get-ChildItem dist\*-setup.exe | Select-Object -First 1
+          $p = Start-Process $setup.FullName -ArgumentList '/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', `
+            '/CURRENTUSER', "/DIR=$dir", "/LOG=$env:RUNNER_TEMP\install.log" -Wait -PassThru
+          if ($p.ExitCode -ne 0) { Get-Content "$env:RUNNER_TEMP\install.log"; throw "setup exited with $($p.ExitCode)" }
+          "AFNI_DIR=$dir" | Out-File -Append -Encoding utf8 $env:GITHUB_ENV
+          "PIPELINE_DIR=$env:RUNNER_TEMP\данные" | Out-File -Append -Encoding utf8 $env:GITHUB_ENV
+
+      - uses: astral-sh/setup-uv@v6
+
+      - name: Fetch the data
+        run: uv run --frozen python -m tests.pipeline.data --data-dir "$env:PIPELINE_DIR\data"
+
+      - name: Run the subjects and the group analysis
+        run: |
+          $common = @('--platform', 'windows', '--afni-dir', $env:AFNI_DIR, '--data-dir', "$env:PIPELINE_DIR\data",
+            '--work-dir', "$env:PIPELINE_DIR\work", '--results-dir', 'results')
+          foreach ($action in 'prepare', 'subjects', 'group') {
+            uv run --frozen python -m tests.pipeline.run $action @common
+            if ($LASTEXITCODE -ne 0) { throw "$action failed" }
+          }
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: pipeline-windows
+          path: results
+
+  compare:
+    needs: [linux-reference, windows, pipeline-linux, pipeline-windows]
     runs-on: ubuntu-24.04
     env:
       AFNI_TAG: ${{ needs.linux-reference.outputs.tag }}
@@ -312,6 +456,16 @@ jobs:
         with:
           name: posix-callsites
           path: posix
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: pipeline-linux
+          path: pipeline/linux
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: pipeline-windows
+          path: pipeline/windows
 
       - uses: astral-sh/setup-uv@v6
 
@@ -336,6 +490,25 @@ jobs:
           cat comparison.md >> "$GITHUB_STEP_SUMMARY"
           exit $status
 
+      # Acceptance criteria of D40: every output of every subject and of the
+      # group analysis within tests/pipeline/tolerance.json, and the wall
+      # time of the subjects at most 1.5 times the Linux time.
+      - name: Compare the pipeline outputs and times
+        run: |
+          status=0
+          : > pipeline-comparison.md
+          for ref in pipeline/linux/results/outputs/*/; do
+            name=$(basename "$ref")
+            uv run --frozen python -m tests.regression.compare --reference "$ref" \
+              --candidate "pipeline/windows/outputs/$name" --tolerance tests/pipeline/tolerance.json \
+              --report "pipeline-$name.md" || status=1
+            { echo "### Pipeline: $name"; tail -n +2 "pipeline-$name.md"; } >> pipeline-comparison.md
+          done
+          uv run --frozen python -m tests.pipeline.run time --reference pipeline/linux/results/timing.json \
+            --candidate pipeline/windows/timing.json --limit 1.5 --report pipeline-time.md || status=1
+          cat pipeline-time.md pipeline-comparison.md | tee -a "$GITHUB_STEP_SUMMARY"
+          exit $status
+
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -344,6 +517,8 @@ jobs:
             comparison.md
             comparison.json
             posix-diff.md
+            pipeline-time.md
+            pipeline-comparison.md
 
   release:
     needs: [linux-reference, windows, compare]
