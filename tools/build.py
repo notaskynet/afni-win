@@ -34,11 +34,17 @@ class BuildConfig(BaseModel):
     generator: str = "Ninja"
     jobs: int | None = None
     manifests: list[Path] = Field(
-        default_factory=lambda: [REPO_ROOT / "manifests" / "programs-required.txt"]
+        default_factory=lambda: [
+            REPO_ROOT / "manifests" / "programs-required.txt",
+            REPO_ROOT / "manifests" / "programs-pipeline.txt",
+        ]
     )
     optional_manifests: list[Path] = Field(default_factory=list)
     extra_targets: list[str] = Field(default_factory=list)
     extra_programs: list[str] = Field(default_factory=list)
+    extra_manifests: list[Path] = Field(
+        default_factory=lambda: [REPO_ROOT / "manifests" / "programs-extra.txt"]
+    )
     cmake_defines: list[str] = Field(default_factory=list)
     patches_dir: Path = REPO_ROOT / "patches"
     toolchain: Path = REPO_ROOT / "cmake" / "toolchain-mingw.cmake"
@@ -148,6 +154,19 @@ def apply_patches(config: BuildConfig, source: Path) -> list[str]:
     return applied
 
 
+def _extra_programs(config: BuildConfig) -> list[str]:
+    """Collect the single-file programs added to the upstream CMake project.
+
+    Args:
+        config: Build configuration.
+
+    Returns:
+        Program names from the extra manifests and ``extra_programs``.
+    """
+    names = _read_manifests(config.extra_manifests, [])
+    return names + [n for n in config.extra_programs if n not in names]
+
+
 def configure(config: BuildConfig, source: Path) -> Path:
     """Configure the upstream CMake project for Windows.
 
@@ -177,7 +196,7 @@ def configure(config: BuildConfig, source: Path) -> Path:
             "-DUSE_OMP=ON",
             f"-DFETCHCONTENT_SOURCE_DIR_NIFTI_CLIB={source / 'src' / 'nifti'}",
             f"-DFETCHCONTENT_SOURCE_DIR_GIFTI_CLIB={REPO_ROOT / 'cmake' / 'gifti'}",
-            f"-DAFNI_WIN_EXTRA_PROGRAMS={';'.join(config.extra_programs)}",
+            f"-DAFNI_WIN_EXTRA_PROGRAMS={';'.join(_extra_programs(config))}",
             *(f"-D{define}" for define in config.cmake_defines),
         ]
     )
@@ -299,7 +318,7 @@ def run(config: BuildConfig) -> BuildResult:
     build_dir = configure(config, source)
     targets = _targets(config)
     optional = _read_manifests(config.optional_manifests, targets)
-    optional += [t for t in config.extra_programs if t not in targets + optional]
+    optional += [t for t in _extra_programs(config) if t not in targets + optional]
     defined = _defined_targets(build_dir)
     defined |= {name for name, target in TARGET_NAMES.items() if target in defined}
     undefined = [t for t in targets if t not in defined]
