@@ -10,7 +10,7 @@ Upstream `AFNI_26.2.09`. Question: what is needed so that a user can run the sta
 | Linux trace | full upstream CMake build on Ubuntu 24.04 (`COMP_GUI`, `COMP_SUMA`, `COMP_PYTHON`, `COMP_TCSH` on), `afni_proc.py` run on one real subject under `strace -f -e execve`; every process start was recorded |
 | Data | OpenNeuro `ds000102` (Flanker task), subject `sub-08`: T1, two BOLD runs of 146 volumes, events (licence PDDL, public domain); template `MNI152NLin2009cAsym` from TemplateFlow (S3). AFNI Bootcamp data are on `afni.nimh.nih.gov`, which has no stated data licence and was not reachable from the research machine (section 9) |
 | Pipeline | `tests/scripts/run_ap.tcsh`: blocks `tshift align tlrc volreg blur mask scale regress`, two stimulus classes and one GLT, motion and outlier censoring, ACF blur estimates, `3dClustSim`. The traced run also made the QC report (`-html_review_style pythonic`) |
-| Prototype (CI) | `scripts-prototype.yml`: same pipeline on the official Linux CMake build and on the afni-win Windows build, MSYS2 `tcsh` and utilities, native AFNI programs; process start benchmark (`tests/scripts/bench_spawn.tcsh`); comparison with `tests.regression.compare` |
+| Prototype (CI) | `scripts-prototype.yml` (removed after S0, in the git history up to commit `22393d9`): same pipeline on the official Linux CMake build and on the afni-win Windows build, MSYS2 `tcsh` and utilities, native AFNI programs; process start benchmark (`tests/scripts/bench_spawn.tcsh`); comparison with `tests.regression.compare` |
 
 ## 2. What the scripting layer is
 
