@@ -18,7 +18,7 @@ gethostname utsname.c GetComputerNameEx(ComputerNameDnsHostname)
 readlink fs.c symbolic links and junctions; other files fail with EINVAL
 realpath fs.c GetFinalPathNameByHandle; result uses forward slashes
 lstat fs.c reports S_IFLNK for symbolic links and junctions
-mkdir fs.c two-argument form; mode is ignored (see noop-allowlist.txt)
+mkdir fs.c two-argument form; mode is ignored (see noop-allowlist.txt); the one-argument Windows form maps to _mkdir
 fsync fs.c _commit
 flock fs.c LockFileEx/UnlockFileEx on the whole file
 times time.c GetProcessTimes; children times accumulated by waitpid
