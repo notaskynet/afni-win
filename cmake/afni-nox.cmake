@@ -95,3 +95,10 @@ if(AFNI_WIN_NOX AND NOT COMP_GUI)
   _afni_win_use_x_headers(1dplot)
   target_link_libraries(1dplot PRIVATE AFNI::mrix AFNI::coxplot AFNI::eispack NIFTI::nifti2 AFNI::mri)
 endif()
+
+# `afni` itself: version queries only (programs/afni_console.c, D36).
+if(NOT COMP_GUI)
+  add_afni_executable(afni "${_afni_win_root}/programs/afni_console.c")
+  target_compile_definitions(afni PRIVATE SHOWOFF)
+  target_link_libraries(afni PRIVATE AFNI::mri)
+endif()
