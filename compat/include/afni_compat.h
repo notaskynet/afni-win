@@ -58,6 +58,8 @@ typedef int key_t;
 /* ---- AFNI machdep.h settings (no Windows branch exists upstream) ---- */
 
 #define THD_MKDIR_MODE 0755
+#define DYNAMIC_LOADING_VIA_DL
+#define DYNAMIC_suffix ".dll"
 #define DONT_USE_SHM
 #define DONT_USE_FORK
 #define READ_WRITE_64
@@ -146,6 +148,7 @@ AFNI_COMPAT_API pid_t getppid(void);
 AFNI_COMPAT_API int fsync(int fd);
 AFNI_COMPAT_API int pause(void);
 AFNI_COMPAT_API int gethostname(char *name, size_t len);
+AFNI_COMPAT_API int nice(int inc);
 
 /* ---- fcntl.h ---- */
 
