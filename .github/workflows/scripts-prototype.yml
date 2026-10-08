@@ -104,13 +104,15 @@ jobs:
 
   # cmd-shell: afnipy's shell commands go to cmd.exe (native Python as is).
   # posix-shell: tests/scripts/pyshim sends them to the MSYS2 sh instead.
+  # posix-shell-defender: same, with Defender real-time protection switched
+  # on (it is off on GitHub runners, on for normal users).
   windows:
     needs: linux
     runs-on: windows-latest
     strategy:
       fail-fast: false
       matrix:
-        variant: [cmd-shell, posix-shell]
+        variant: [cmd-shell, posix-shell, posix-shell-defender]
     env:
       AFNI_TAG: ${{ needs.linux.outputs.tag }}
       VARIANT: ${{ matrix.variant }}
@@ -139,6 +141,15 @@ jobs:
         run: |
           curl -fsSL -o busybox64u.exe "$BUSYBOX_URL" || curl -fsSL -o busybox64u.exe "$BUSYBOX_FALLBACK_URL"
           echo "$BUSYBOX_SHA256  busybox64u.exe" | sha256sum -c -
+
+      - name: Switch on Defender real-time protection
+        if: matrix.variant == 'posix-shell-defender'
+        continue-on-error: true
+        shell: pwsh
+        run: |
+          Set-MpPreference -DisableRealtimeMonitoring $false
+          Start-Sleep -Seconds 10
+          Get-MpComputerStatus | Select-Object RealTimeProtectionEnabled, AMRunningMode, AntivirusEnabled
 
       - name: Build the pipeline programs
         run: |
@@ -233,12 +244,13 @@ jobs:
           {
             echo "## Process start cost (ms per call)"
             echo
-            echo "| What | Linux | Windows cmd-shell job (MSYS2 tcsh) | Windows posix-shell job (MSYS2 tcsh) | Windows (native tcsh) |"
-            echo "|---|---|---|---|---|"
+            echo "| What | Linux | Windows cmd-shell job | Windows posix-shell job | Windows posix-shell-defender job | Windows (native tcsh) |"
+            echo "|---|---|---|---|---|---|"
             for what in true ccalc @GetAfniView python; do
               row="| $what"
               for f in prototype-linux/bench.txt prototype-windows-cmd-shell/bench.txt \
-                prototype-windows-posix-shell/bench.txt prototype-windows-cmd-shell/bench-native-tcsh.txt; do
+                prototype-windows-posix-shell/bench.txt prototype-windows-posix-shell-defender/bench.txt \
+                prototype-windows-cmd-shell/bench-native-tcsh.txt; do
                 row="$row | $(awk -v w="$what" '$1 == w { print $3 }' "$f" 2>/dev/null || true)"
               done
               echo "$row |"
@@ -246,18 +258,19 @@ jobs:
             echo
             echo "## Pipeline"
             echo
-            echo "| | Linux | Windows cmd-shell | Windows posix-shell |"
-            echo "|---|---|---|---|"
+            echo "| | Linux | Windows cmd-shell | Windows posix-shell | Windows posix-shell-defender |"
+            echo "|---|---|---|---|---|"
             for f in status seconds; do
               row="| $f"
-              for d in prototype-linux prototype-windows-cmd-shell prototype-windows-posix-shell; do
+              for d in prototype-linux prototype-windows-cmd-shell prototype-windows-posix-shell \
+                prototype-windows-posix-shell-defender; do
                 row="$row | $(cat "$d/$f.txt" 2>/dev/null || true)"
               done
               echo "$row |"
             done
             echo
           } | tee -a "$GITHUB_STEP_SUMMARY"
-          for v in cmd-shell posix-shell; do
+          for v in cmd-shell posix-shell posix-shell-defender; do
             if [ -d "prototype-windows-$v/outputs" ]; then
               uv run --frozen python -m tests.regression.compare --reference prototype-linux/outputs \
                 --candidate "prototype-windows-$v/outputs" --report "comparison-$v.md" || true
