@@ -20,6 +20,7 @@ afni_compat_sighandler_t afni_compat_signal(int sig, afni_compat_sighandler_t ha
       return signal(sig, handler);
     case SIGPIPE:
     case SIGBUS:
+    case SIGQUIT:
       return SIG_DFL;
     default:
       break;

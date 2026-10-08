@@ -1,0 +1,31 @@
+# NLfit model libraries (src/CMakeLists.txt), loaded with dlopen by 3dTSgen and 1dNLfit.
+# Optional, built as lib<name>.dll next to the programs.
+model_beta
+model_constant
+model_conv_PRF
+model_conv_PRF_6
+model_conv_PRF_DOG
+model_conv_cosine4
+model_conv_diffgamma
+model_convgamma
+model_convgamma2a
+model_demri_3
+model_diffexp
+model_diffusion
+model_exp
+model_expMEMRI
+model_expMEMRI3
+model_expr2
+model_gammavar
+model_linear
+model_linplusort
+model_michaelis_menton
+model_null
+model_quadratic
+model_sinewave_ap
+model_sinewave_apf
+model_squarewave_ap
+model_squarewave_apf
+model_trnglwave_ap
+model_trnglwave_apf
+model_zero

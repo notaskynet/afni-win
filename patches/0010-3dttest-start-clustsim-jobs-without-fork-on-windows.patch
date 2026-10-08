@@ -1,0 +1,31 @@
+From: afni-win
+Subject: [PATCH] 3dttest++: start -Clustsim jobs without fork on Windows
+
+Why the compat layer cannot handle this: start_job() calls fork(); the
+child only runs system(cmd) and exits, the parent records the pid and later
+waits with wait(). fork() must return twice, which no library can provide
+on Windows, so the call site has to change. Under _WIN32 the patch starts
+"sh -c cmd" asynchronously with afni_compat_spawn_shell() (same shell as
+system(), child registered for wait()/waitpid()), which is what the forked
+child did. The error path (kill() of earlier jobs) and wait_for_jobs() are
+unchanged; the layer implements kill(SIGTERM) and wait().
+
+diff --git a/src/3dttest++.c b/src/3dttest++.c
+index 8f940f1..38c6615 100644
+--- a/src/3dttest++.c
++++ b/src/3dttest++.c
+@@ -2374,7 +2374,14 @@ void start_job( char *cmd )   /* 10 Feb 2016 */
+    if( cmd == NULL || *cmd == '\0' ) return ;
+ 
+    errno = 0 ;
++#ifdef _WIN32
++   /* afni-win: no fork() on Windows; the child below would only run
++      system(cmd), so start "sh -c cmd" directly without waiting for it */
++   errno = afni_compat_spawn_shell( &newid , cmd ) ;
++   if( errno != 0 ) newid = (pid_t)-1 ;
++#else
+    newid = fork() ;
++#endif
+ 
+    if( newid == (pid_t)-1 ){  /*--- fork failed -- should never happen ---*/
+ 

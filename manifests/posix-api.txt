@@ -18,24 +18,50 @@ gethostname utsname.c GetComputerNameEx(ComputerNameDnsHostname)
 readlink fs.c symbolic links and junctions; other files fail with EINVAL
 realpath fs.c GetFinalPathNameByHandle; result uses forward slashes
 lstat fs.c reports S_IFLNK for symbolic links and junctions
-mkdir fs.c two-argument form; mode is ignored (see noop-allowlist.txt)
+mkdir fs.c two-argument form; mode is ignored (see noop-allowlist.txt); the one-argument Windows form maps to _mkdir
 fsync fs.c _commit
 flock fs.c LockFileEx/UnlockFileEx on the whole file
-select time.c no descriptors: sleeps for the timeout; descriptors: ENOSYS (see enosys.txt)
 times time.c GetProcessTimes; children times accumulated by waitpid
 mmap mman.c file mappings (read-only, shared read-write, private copy-on-write) and anonymous mappings; any offset
 munmap mman.c whole regions only (page-rounded length); partial unmap fails with ENOSYS
 posix_spawn process.c CreateProcess; file actions and attributes fail with ENOSYS
 posix_spawnp process.c PATH lookup with optional .exe suffix
-waitpid process.c pid > 0 or -1; WNOHANG; other options and process groups fail with ENOSYS
+waitpid process.c pid > 0 or -1 (any number of children); WNOHANG; other options and process groups fail with ENOSYS
 wait process.c waitpid(-1, status, 0)
 getppid process.c Toolhelp snapshot; may be 0 if the parent is not a Windows process
+kill process.c SIGTERM and SIGKILL terminate the process (TerminateProcess; handlers in the target do not run, waitpid reports WIFSIGNALED); 0 checks that the process exists; other signals and process groups fail with ENOSYS
+nice process.c priority class from the nice value: <= -10 HIGH, < 0 ABOVE_NORMAL, 0 NORMAL, 1-9 BELOW_NORMAL, >= 10 IDLE; returns the new value (clamped to -20..19)
+dlopen dl.c LoadLibraryEx ('/' converted to '\'); NULL returns the main program; flags see noop-allowlist.txt
+dlsym dl.c GetProcAddress
+dlclose dl.c FreeLibrary; closing the main program is a no-op returning 0, as with glibc
+dlerror dl.c text from FormatMessage; one error per process, not per thread
+afni_compat_spawn_shell shell.c not POSIX: sh -c without waiting, child reaped by wait()/waitpid() (patch 0010)
 signal signal.c SIGINT SIGILL SIGFPE SIGSEGV SIGTERM SIGBREAK SIGABRT via UCRT; SIGPIPE SIGBUS see noop-allowlist.txt; others SIG_ERR + ENOSYS
+socket net.c Winsock socket wrapped in a CRT descriptor (_open_osfhandle); read()/write() work on it
+bind net.c
+listen net.c
+accept net.c
+connect net.c
+send net.c
+recv net.c
+setsockopt net.c SO_LINGER converted to the Winsock layout; other options passed through
+getsockopt net.c SO_LINGER converted to the Winsock layout; other options passed through
+shutdown net.c
+gethostbyname net.c
+gethostbyaddr net.c
+close net.c afni_compat_close (close redirected in C code): closesocket for sockets, _close otherwise
+select net.c sockets through Winsock select; no descriptors: sleeps for the timeout; other descriptors: ENOSYS (see enosys.txt)
+fcntl net.c sockets: F_GETFL, F_SETFL (O_NONBLOCK), F_SETOWN (see noop-allowlist.txt); other descriptors: ENOSYS (see enosys.txt)
 inet_ntoa net.c
 htons net.c inline
 htonl net.c inline
 ntohs net.c inline
 ntohl net.c inline
 strcasestr string.c
+popen shell.c sh -c through busybox.exe next to afni_compat.dll, or the sh in AFNI_COMPAT_SHELL; pipes in binary mode
+pclose shell.c waits for the shell; status encoded as by waitpid
+system shell.c same shell as popen; system(NULL) reports whether a shell is available
+HOME env.c set at load time from USERPROFILE (forward slashes) when unset
+TMPDIR env.c set at load time from GetTempPath (forward slashes, no trailing slash) when unset
 fseek afni_compat.h mapped to _fseeki64
 ftell afni_compat.h mapped to _ftelli64

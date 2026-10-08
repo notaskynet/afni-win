@@ -260,7 +260,7 @@ def _scan_programs(
     return programs
 
 
-def _scan_callsites(source_dir: Path) -> dict[str, list[str]]:
+def scan_callsites(source_dir: Path) -> dict[str, list[str]]:
     """Find textual call sites of inventoried APIs in first-party C sources.
 
     Args:
@@ -311,7 +311,7 @@ def build_inventory(config: InventoryConfig) -> Inventory:
     }
     programs = _scan_programs(config.build_dir, archives)
     logger.info("Scanned %d programs", len(programs))
-    callsites = _scan_callsites(config.source_dir)
+    callsites = scan_callsites(config.source_dir)
     return Inventory(programs=programs, objects=objects, callsites=callsites, groups=API_GROUPS)
 
 

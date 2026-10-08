@@ -1,6 +1,10 @@
 #ifndef AFNI_COMPAT_H
 #define AFNI_COMPAT_H
 
+/* src/winsock_bridge.c includes <winsock2.h> itself and must not see the
+   POSIX declarations below (the toolchain forces this header everywhere). */
+#ifndef AFNI_COMPAT_WINSOCK_BRIDGE
+
 /*
  * Forced include for every translation unit of the Windows build
  * (-include afni_compat.h). It must be processed before any system header.
@@ -54,6 +58,8 @@ typedef int key_t;
 /* ---- AFNI machdep.h settings (no Windows branch exists upstream) ---- */
 
 #define THD_MKDIR_MODE 0755
+#define DYNAMIC_LOADING_VIA_DL
+#define DYNAMIC_suffix ".dll"
 #define DONT_USE_SHM
 #define DONT_USE_FORK
 #define READ_WRITE_64
@@ -89,6 +95,11 @@ AFNI_COMPAT_API char *realpath(const char *path, char *resolved_path);
 AFNI_COMPAT_API FILE *afni_compat_popen(const char *command, const char *mode);
 AFNI_COMPAT_API int afni_compat_pclose(FILE *stream);
 AFNI_COMPAT_API int afni_compat_system(const char *command);
+
+/* Not POSIX: starts "sh -c command" like system() but does not wait; the
+   child is reaped with wait()/waitpid(). Returns 0 or an errno value. Used
+   where upstream runs system() in a fork()ed child (patches/0010). */
+AFNI_COMPAT_API int afni_compat_spawn_shell(pid_t *pid, const char *command);
 
 /* ---- string.h ---- */
 
@@ -137,6 +148,7 @@ AFNI_COMPAT_API pid_t getppid(void);
 AFNI_COMPAT_API int fsync(int fd);
 AFNI_COMPAT_API int pause(void);
 AFNI_COMPAT_API int gethostname(char *name, size_t len);
+AFNI_COMPAT_API int nice(int inc);
 
 /* ---- fcntl.h ---- */
 
@@ -147,6 +159,15 @@ AFNI_COMPAT_API int gethostname(char *name, size_t len);
 #define O_NDELAY O_NONBLOCK
 
 AFNI_COMPAT_API int fcntl(int fd, int cmd, ...);
+
+/* close() that also closes sockets (see sys/socket.h). Consumers declare it
+   without dllimport (the import library thunk is used), because upstream
+   f2c/rawio.h redeclares close() itself. */
+#if defined(AFNI_COMPAT_BUILDING)
+AFNI_COMPAT_API int afni_compat_close(int fd);
+#else
+int afni_compat_close(int fd);
+#endif
 
 /* ---- sys/file.h ---- */
 
@@ -200,6 +221,7 @@ typedef void (*afni_compat_sighandler_t)(int);
 
 AFNI_COMPAT_API afni_compat_sighandler_t afni_compat_signal(int sig,
                                                             afni_compat_sighandler_t handler);
+AFNI_COMPAT_API int kill(pid_t pid, int sig);
 
 #ifdef __cplusplus
 }
@@ -214,12 +236,20 @@ AFNI_COMPAT_API afni_compat_sighandler_t afni_compat_signal(int sig,
 
 #if !defined(AFNI_COMPAT_BUILDING)
 #define signal(sig, handler) afni_compat_signal((sig), (handler))
-#define mkdir(path, mode) afni_compat_mkdir((path), (mode))
+/* mkdir(path, mode) is POSIX; mkdir(path) is the Windows form that upstream
+   C++ code (dcm2niix) uses in its own _WIN32 branches. */
+#define AFNI_COMPAT_MKDIR_SELECT(_1, _2, name, ...) name
+#define mkdir(...) AFNI_COMPAT_MKDIR_SELECT(__VA_ARGS__, afni_compat_mkdir, _mkdir)(__VA_ARGS__)
 #undef popen
 #undef pclose
 #define popen(command, mode) afni_compat_popen((command), (mode))
 #define pclose(stream) afni_compat_pclose(stream)
 #define system(command) afni_compat_system(command)
+#ifndef __cplusplus
+#define close(fd) afni_compat_close(fd)
 #endif
+#endif
+
+#endif /* AFNI_COMPAT_WINSOCK_BRIDGE */
 
 #endif

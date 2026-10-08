@@ -47,6 +47,9 @@ int main(void) {
   CHECK(stat("compat_fs_dir", &st) == 0 && S_ISDIR(st.st_mode));
   CHECK_ERRNO(mkdir("compat_fs_dir", 0755), EEXIST);
   CHECK(_rmdir("compat_fs_dir") == 0);
+  CHECK(mkdir("compat_fs_dir") == 0);
+  CHECK(stat("compat_fs_dir", &st) == 0 && S_ISDIR(st.st_mode));
+  CHECK(_rmdir("compat_fs_dir") == 0);
 
   fd1 = open("compat_fs_file.txt", O_RDWR);
   fd2 = open("compat_fs_file.txt", O_RDWR);

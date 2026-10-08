@@ -3,6 +3,9 @@
 # or fails with an error and a stderr message.
 # Format: <operation> | <justification>
 signal(SIGPIPE, handler) | Windows never raises SIGPIPE; a failed write to a pipe or socket returns an error instead. Returns SIG_DFL (the disposition is and stays default).
+signal(SIGQUIT, handler) | Windows has no SIGQUIT (there is no Ctrl+\ console event; Ctrl+Break raises SIGBREAK). The only caller in scope is 3dQwarp (mri_nwarp.c), which lets the user stop the optimizer with kill -QUIT. Returns SIG_DFL.
 signal(SIGBUS, handler) | Windows never raises SIGBUS; misaligned or out-of-range memory access raises SIGSEGV (access violation). Returns SIG_DFL.
 mallopt(param, value) | Allocator hint only; UCRT malloc has no tunables. Will return 0 without a message. Not declared yet: the only upstream call (machdep.c) is under defined(LINUX), which the Windows build does not define.
 mkdir(path, mode) | NTFS has no POSIX permission bits; the directory is created with inherited ACLs. Only the mode argument is ignored.
+fcntl(socket, F_SETOWN, pid) | F_SETOWN only selects the process that receives SIGURG/SIGIO for the socket; Windows never raises these signals. Upstream calls it after accept() in niml_stream.c and ignores the result. Returns 0.
+dlopen(path, RTLD_LAZY/RTLD_NOW/RTLD_GLOBAL/RTLD_LOCAL) | Windows resolves all imports of a DLL when it is loaded and has no global symbol namespace for later DLLs; the NLfit models, the only users, link libmri.dll themselves and look up their entry point with dlsym. Only the flags are ignored.

@@ -1,5 +1,4 @@
 #include <limits.h>
-#include <stdarg.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/stat.h>
@@ -266,11 +265,4 @@ int flock(int fd, int operation) {
     return -1;
   }
   return 0;
-}
-
-int fcntl(int fd, int cmd, ...) {
-  (void)fd;
-  (void)cmd;
-  AFNI_COMPAT_UNSUPPORTED("file descriptor flags (used only for sockets)");
-  return -1;
 }

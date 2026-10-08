@@ -1,0 +1,30 @@
+From: afni-win
+Subject: [PATCH] thd_getpathprogs: find executables with an .exe suffix on Windows
+
+Why the compat layer cannot handle this: THD_find_executable() lists the
+executable files in every PATH directory and compares their names with the
+requested name exactly ("gzip"). On Windows the file is "gzip.exe", so the
+lookup never succeeds; thd_compress.c then marks gzip/bzip2 as missing and
+AFNI_COMPRESSOR=GZIP silently writes uncompressed .BRIK files, and the
+same lookup is used for curl/wget and other helper programs. The comparison
+happens inside upstream code on directory listings, so no replacement header
+or library function can change it. Under _WIN32 the patch also accepts the
+requested name followed by ".exe" (case-insensitive suffix).
+
+diff --git a/src/thd_getpathprogs.c b/src/thd_getpathprogs.c
+index 678558e..e67cea8 100644
+--- a/src/thd_getpathprogs.c
++++ b/src/thd_getpathprogs.c
+@@ -38,6 +38,12 @@ ENTRY("THD_find_executable") ;
+    for( ii=0 ; ii < elist->num ; ii++ ){
+       str = THD_trailname( elist->ar[ii] , 0 ) ;
+       if( strcmp(str,etr) == 0 ) RETURN(elist->ar[ii]) ;
++#ifdef _WIN32
++      /* executables carry a ".exe" suffix on Windows [afni-win] */
++      { size_t ll = strlen(etr) ;
++        if( strncmp(str,etr,ll) == 0 && strcasecmp(str+ll,".exe") == 0 )
++          RETURN(elist->ar[ii]) ; }
++#endif
+    }
+ 
+    RETURN(NULL) ;

@@ -12,15 +12,13 @@ static void handler(int sig) {
 int main(void) {
   CHECK(signal(SIGPIPE, handler) == SIG_DFL);
   CHECK(signal(SIGBUS, SIG_IGN) == SIG_DFL);
+  CHECK(signal(SIGQUIT, handler) == SIG_DFL);
 
   errno = 0;
   CHECK(signal(SIGALRM, handler) == SIG_ERR);
   CHECK(errno == ENOSYS);
   errno = 0;
   CHECK(signal(SIGHUP, handler) == SIG_ERR);
-  CHECK(errno == ENOSYS);
-  errno = 0;
-  CHECK(signal(SIGQUIT, handler) == SIG_ERR);
   CHECK(errno == ENOSYS);
 
   CHECK(signal(SIGINT, handler) != SIG_ERR);

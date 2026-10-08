@@ -105,9 +105,26 @@ index a25b980..b4d0d4d 100644
  extern "C" {                    /* care of Greg Balls    7 Aug 2006 [rickr] */
  #endif
 diff --git a/src/suma_utils.c b/src/suma_utils.c
-index 0a521b4..57b3e53 100644
+index 0a521b4..4d474f4 100644
 --- a/src/suma_utils.c
 +++ b/src/suma_utils.c
+@@ -1067,14 +1067,14 @@ SUMA_PARSED_NAME * SUMA_ParseFname_eng (char *FileName, char *ucwd,
+ 
+    /* work cwd */
+    if (ucwd) {
+-      if (ucwd[0] != '/') {
++      if (!THD_IS_ABSPATH(ucwd)) {
+          SUMA_S_Err("Current working directory must start with '/'");
+          SUMA_RETURN(NULL);
+       }
+       cwd = SUMA_copy_string(ucwd);
+    } else {
+       cwd = SUMA_getcwd();
+-      if (cwd[0] != '/') {
++      if (!THD_IS_ABSPATH(cwd)) {
+          SUMA_S_Err("STRANGE! Current working directory must start with '/'");
+          SUMA_free(cwd); cwd = NULL;
+          SUMA_RETURN(NULL);
 @@ -1180,7 +1180,7 @@ SUMA_PARSED_NAME * SUMA_ParseFname_eng (char *FileName, char *ucwd,
           NewName->Path = (char *)SUMA_malloc(sizeof(char)*(3));
           sprintf(NewName->Path, "./");

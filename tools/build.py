@@ -18,6 +18,10 @@ logger = logging.getLogger(__name__)
 REPO_ROOT = Path(__file__).resolve().parent.parent
 DEFAULT_UPSTREAM = "https://github.com/afni/afni.git"
 
+# Programs whose CMake target name differs from the file name
+# (set_target_properties(... OUTPUT_NAME ...) upstream).
+TARGET_NAMES: dict[str, str] = {"dcm2niix_afni": "dcm2niix"}
+
 
 class BuildConfig(BaseModel):
     """Build configuration."""
@@ -32,6 +36,7 @@ class BuildConfig(BaseModel):
     manifests: list[Path] = Field(
         default_factory=lambda: [REPO_ROOT / "manifests" / "programs-required.txt"]
     )
+    optional_manifests: list[Path] = Field(default_factory=list)
     extra_targets: list[str] = Field(default_factory=list)
     patches_dir: Path = REPO_ROOT / "patches"
     toolchain: Path = REPO_ROOT / "cmake" / "toolchain-mingw.cmake"
@@ -48,6 +53,9 @@ class BuildResult(BaseModel):
     built: list[str]
     missing: list[str]
     undefined: list[str]
+    optional_built: list[str] = Field(default_factory=list)
+    optional_missing: list[str] = Field(default_factory=list)
+    optional_undefined: list[str] = Field(default_factory=list)
 
 
 class PatchError(RuntimeError):
@@ -172,8 +180,27 @@ def configure(config: BuildConfig, source: Path) -> Path:
     return build
 
 
+def _read_manifests(manifests: list[Path], exclude: list[str]) -> list[str]:
+    """Collect program names from manifest files.
+
+    Args:
+        manifests: Files with one program per line; ``#`` starts a comment.
+        exclude: Names to leave out.
+
+    Returns:
+        Ordered list of unique names.
+    """
+    names: list[str] = []
+    for manifest in manifests:
+        for line in manifest.read_text().splitlines():
+            name = line.split("#", 1)[0].strip()
+            if name and name not in names and name not in exclude:
+                names.append(name)
+    return names
+
+
 def _targets(config: BuildConfig) -> list[str]:
-    """Collect build targets from the manifests and extra targets.
+    """Collect required build targets from the manifests and extra targets.
 
     Args:
         config: Build configuration.
@@ -181,12 +208,7 @@ def _targets(config: BuildConfig) -> list[str]:
     Returns:
         Ordered list of unique target names.
     """
-    names: list[str] = []
-    for manifest in config.manifests:
-        for line in manifest.read_text().splitlines():
-            name = line.split("#", 1)[0].strip()
-            if name and name not in names:
-                names.append(name)
+    names = _read_manifests(config.manifests, [])
     for name in config.extra_targets:
         if name not in names:
             names.append(name)
@@ -206,6 +228,24 @@ def _defined_targets(build_dir: Path) -> set[str]:
     return {line.split(":", 1)[0] for line in result.stdout.splitlines() if ":" in line}
 
 
+def _log_failures(log: str, lines_per_failure: int = 6) -> None:
+    """Log the first error lines of every failed build edge.
+
+    Args:
+        log: Ninja output.
+        lines_per_failure: Lines logged after each ``FAILED:`` line.
+    """
+    lines = log.splitlines()
+    for index, line in enumerate(lines):
+        if line.startswith("FAILED:"):
+            context = [
+                text
+                for text in lines[index + 1 : index + 40]
+                if "error" in text or "undefined reference" in text
+            ][:lines_per_failure]
+            logger.warning("%s\n%s", line, "\n".join(context))
+
+
 def build(config: BuildConfig, build_dir: Path, targets: list[str]) -> tuple[list[str], list[str]]:
     """Build the given targets, continuing past failures.
 
@@ -215,17 +255,27 @@ def build(config: BuildConfig, build_dir: Path, targets: list[str]) -> tuple[lis
         targets: Targets to build; all of them must be defined.
 
     Returns:
-        Built and missing program names.
+        Built and missing target names (programs ``<name>.exe``, libraries
+        ``lib<name>.dll``).
     """
-    cmd = ["cmake", "--build", str(build_dir), "--target", *targets]
+    cmd = [
+        "cmake",
+        "--build",
+        str(build_dir),
+        "--target",
+        *(TARGET_NAMES.get(t, t) for t in targets),
+    ]
     if config.jobs is not None:
         cmd += ["--parallel", str(config.jobs)]
     cmd += ["--", "-k", "0"]
     logger.info("$ %s", " ".join(cmd))
     result = subprocess.run(cmd, text=True, capture_output=True)
     (build_dir / "build.log").write_text(result.stdout + result.stderr)
+    _log_failures(result.stdout + result.stderr)
     output = build_dir / "targets_built"
-    built = [t for t in targets if (output / f"{t}.exe").exists()]
+    built = [
+        t for t in targets if (output / f"{t}.exe").exists() or (output / f"lib{t}.dll").exists()
+    ]
     missing = [t for t in targets if t not in built]
     return built, missing
 
@@ -244,18 +294,24 @@ def run(config: BuildConfig) -> BuildResult:
     commit = _run(["git", "rev-parse", "HEAD"], cwd=source).stdout.strip()
     build_dir = configure(config, source)
     targets = _targets(config)
+    optional = _read_manifests(config.optional_manifests, targets)
     defined = _defined_targets(build_dir)
+    defined |= {name for name, target in TARGET_NAMES.items() if target in defined}
     undefined = [t for t in targets if t not in defined]
+    optional_undefined = [t for t in optional if t not in defined]
     if undefined:
         logger.warning("Not defined by the upstream CMake configuration: %s", undefined)
-    built, missing = build(config, build_dir, [t for t in targets if t in defined])
+    built, missing = build(config, build_dir, [t for t in targets + optional if t in defined])
     return BuildResult(
         tag=config.tag,
         commit=commit,
         patches=patches,
-        built=built,
-        missing=missing,
+        built=[t for t in built if t in targets],
+        missing=[t for t in missing if t in targets],
         undefined=undefined,
+        optional_built=[t for t in built if t in optional],
+        optional_missing=[t for t in missing if t in optional],
+        optional_undefined=optional_undefined,
     )
 
 
@@ -272,6 +328,9 @@ def _parse_args() -> BuildConfig:
     parser.add_argument("--source-dir", type=Path)
     parser.add_argument("--jobs", type=int)
     parser.add_argument("--manifest", dest="manifests", type=Path, action="append")
+    parser.add_argument(
+        "--optional-manifest", dest="optional_manifests", type=Path, action="append", default=[]
+    )
     parser.add_argument("--target", dest="extra_targets", action="append", default=[])
     parser.add_argument("--skip-fetch", action="store_true")
     parser.add_argument("--skip-patch", action="store_true")
@@ -282,7 +341,7 @@ def _parse_args() -> BuildConfig:
 
 
 def main() -> None:
-    """Run the build from the command line and print a JSON summary to stdout."""
+    """Run the build and print a JSON summary; fail only if a required program is missing."""
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
     config = _parse_args()
     try:
@@ -295,12 +354,18 @@ def main() -> None:
         sys.exit(1)
     (config.work_dir / "build-result.json").write_text(result.model_dump_json(indent=2))
     logger.info(
-        "Built %d, failed %d %s, undefined %d %s",
+        "Required: built %d, failed %d %s, undefined %d %s",
         len(result.built),
         len(result.missing),
         result.missing,
         len(result.undefined),
         result.undefined,
+    )
+    logger.info(
+        "Optional: built %d, failed %d, undefined %d",
+        len(result.optional_built),
+        len(result.optional_missing),
+        len(result.optional_undefined),
     )
     sys.stdout.write(json.dumps(result.model_dump(), indent=2) + "\n")
     if result.missing or result.undefined:

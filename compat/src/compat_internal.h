@@ -10,6 +10,7 @@
 
 void afni_compat_report(const char *function, const char *detail);
 void afni_compat_set_errno_from_win32(DWORD error);
+void afni_compat_init_environment(void);
 
 #define AFNI_COMPAT_UNSUPPORTED(detail)            \
   do {                                             \

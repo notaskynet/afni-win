@@ -1,0 +1,62 @@
+name: watch-upstream-tags
+
+# Daily: finds upstream AFNI release tags (not older than
+# manifests/upstream-baseline.txt) that have no <tag>-win release, no
+# "Build failed: <tag>" issue and no build in progress, and starts
+# build-windows.yml with publish=true for the newest of them.
+
+on:
+  schedule:
+    - cron: '17 4 * * *'
+  workflow_dispatch:
+    inputs:
+      max_tags:
+        description: Maximum number of tags to start
+        default: '3'
+
+permissions:
+  actions: write
+  contents: read
+  issues: read
+
+concurrency:
+  group: watch-upstream-tags
+  cancel-in-progress: false
+
+jobs:
+  dispatch:
+    runs-on: ubuntu-24.04
+    env:
+      GH_TOKEN: ${{ github.token }}
+      AFNI_UPSTREAM: https://github.com/afni/afni.git
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v6
+
+      - name: Select new upstream tags
+        id: select
+        run: |
+          gh release list --limit 1000 --json tagName > released.json
+          gh issue list --label build-failed --state all --limit 1000 --json title > failed.json || echo '[]' > failed.json
+          tags=$(uv run --frozen python -m tools.upstream_tags select --upstream-url "$AFNI_UPSTREAM" \
+            --baseline-file manifests/upstream-baseline.txt --released released.json --failed failed.json \
+            --max-tags "${{ inputs.max_tags || '3' }}")
+          echo "tags=$tags" >> "$GITHUB_OUTPUT"
+          echo "Selected: $tags" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Start the builds
+        env:
+          TAGS: ${{ steps.select.outputs.tags }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+        run: |
+          running=$(gh run list --workflow build-windows.yml --limit 100 \
+            --json displayTitle,status --jq '.[] | select(.status != "completed") | .displayTitle')
+          for tag in $(echo "$TAGS" | jq -r '.[]'); do
+            if grep -qx "build $tag (publish)" <<< "$running"; then
+              echo "$tag: a build is already running" >> "$GITHUB_STEP_SUMMARY"
+              continue
+            fi
+            gh workflow run build-windows.yml --ref "$DEFAULT_BRANCH" -f tag="$tag" -f publish=true
+            echo "$tag: build started" >> "$GITHUB_STEP_SUMMARY"
+          done

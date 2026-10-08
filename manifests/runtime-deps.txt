@@ -9,6 +9,8 @@ libgcc_s_seh-1.dll | MSYS2 mingw-w64-ucrt-x86_64-gcc-libs | 16.2.0-4 | GPL-3.0 w
 libwinpthread-1.dll | MSYS2 mingw-w64-ucrt-x86_64-libwinpthread | 14.0.0.r426.g4564ee4b5-1 | MIT and BSD-3-Clause | libgomp-1.dll
 zlib1.dll | MSYS2 mingw-w64-ucrt-x86_64-zlib | 1.3.2-2 | Zlib | libmri.dll, NIfTI and GIFTI libraries
 libexpat-1.dll | MSYS2 mingw-w64-ucrt-x86_64-expat | 2.8.5-1 | MIT | libgiftiio.dll
-busybox64u.exe | busybox-w32, https://frippery.org/files/busybox/busybox64u.exe | 1.38.0 (FRP-6075-g169694ebd), sha256 6e263d154d8548d1eb936f65d1d8312c80df31c45974e48d6335e4dcc0f4f34c | GPL-2.0-only | sh for popen()/system(); gzip/bzip2 applets for compressed .BRIK
+busybox.exe (also shipped as gzip.exe and bzip2.exe) | busybox-w32, https://frippery.org/files/busybox/busybox64u.exe | 1.38.0 (FRP-6075-g169694ebd), sha256 6e263d154d8548d1eb936f65d1d8312c80df31c45974e48d6335e4dcc0f4f34c | GPL-2.0-only | sh for popen()/system(); gzip/bzip2 applets for compressed .BRIK
 qhull.exe | MSYS2 mingw-w64-ucrt-x86_64-qhull (not upstream src/qhulldir, which fails on Win64: ptr_intT is long) | 2020.2-3 | Qhull licence (BSD-like) | cs_qhull.c via popen("qhull ...")
 AFNI_atlas_spaces.niml | upstream AFNI tag, src/AFNI_atlas_spaces.niml | upstream tag | AFNI | whereami and atlas functions; atlas datasets themselves are NOT shipped until their licences are checked
+cjpeg.exe, djpeg.exe and their DLLs | MSYS2 mingw-w64-ucrt-x86_64-libjpeg-turbo | version recorded in the release notes | IJG and BSD-3-Clause | 3dDeconvolve -xjpeg and other JPEG output through mri_write.c
+libmodel_*.dll | upstream AFNI tag (src/model_*.c) | upstream tag | AFNI | NLfit models loaded by 3dTSgen and 1dNLfit

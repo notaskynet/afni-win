@@ -1,0 +1,39 @@
+{
+  "default": {
+    "rtol": 1e-05,
+    "atol_scale": 1e-06
+  },
+  "text": {
+    "rtol": 0.0001
+  },
+  "overrides": [
+    {
+      "pattern": "tproject*|bandpass*|decon*|reml*|synth*|X.xmat.1D|logs/tproject.*|logs/bandpass.*|logs/deconvolve.*|logs/remlfit.*|logs/synthesize.*",
+      "reason": "least-squares fits whose regressors come from transcendental functions (sin/cos, exp): last-bit differences between glibc and UCRT are amplified by the condition number of the design matrix",
+      "tolerance": {
+        "rtol": 0.0001,
+        "atol_scale": 1e-05
+      },
+      "text_rtol": 0.001
+    },
+    {
+      "pattern": "volreg*|allin*|qwarp*|nwarp_*|unifize*|blur_to_fwhm*|logs/volreg.*|logs/allineate.*|logs/qwarp.*|logs/nwarp_*|logs/unifize.*|logs/blur_to_fwhm.*|logs/cat_matvec.*",
+      "reason": "iterative optimisation (registration, iterative blurring): when the cost function differs in the last bits the optimiser stops at a slightly different point; also programs that only transform such a result (cat_matvec inverts the 3dAllineate matrix allin.aff12.1D)",
+      "tolerance": {
+        "rtol": 0.01,
+        "atol_scale": 0.01
+      },
+      "text_rtol": 0.01
+    },
+    {
+      "pattern": "3dFWHMx.1D|fwhmx_acf.1D|logs/fwhmx.*|ttcs.*|ttest_cs+orig.HEAD|logs/ttest_clustsim.*",
+      "reason": "not reproducible upstream, verified by two runs on the same Linux machine: 3dFWHMx fits the ACF model with powell_int.c, which reseeds srand48 with time(NULL)+getpid() (lines 360 and 569) and ignores AFNI_RANDOM_SEEDVAL; the 3dttest++ -Clustsim tables also differ between runs although the seeds are fixed and the per-job minmax files are identical (cause not traced). Differences are reported only; exit codes and the presence of the files are still checked",
+      "tolerance": {
+        "rtol": 0.01,
+        "atol_scale": 0.01
+      },
+      "text_rtol": 0.01,
+      "informational": true
+    }
+  ]
+}

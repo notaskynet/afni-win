@@ -10,6 +10,7 @@ dependencies = [
 
 [dependency-groups]
 dev = [
+    "pytest>=9.1.1",
     "ruff>=0.8",
     "ty>=0.0.1a1",
 ]
@@ -27,3 +28,7 @@ ban-relative-imports = "all"
 
 [tool.ruff.lint.pydocstyle]
 convention = "google"
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]

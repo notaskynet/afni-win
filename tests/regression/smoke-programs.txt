@@ -1,3 +1,0 @@
-3dinfo
-3dcalc
-3dTstat
