@@ -1,11 +1,12 @@
 """Tests for runtime/python/afni_win_posix_shell.py."""
 
 import importlib.util
+import ntpath
 import os
 import subprocess
 import sys
 from pathlib import Path
-from types import ModuleType
+from types import ModuleType, SimpleNamespace
 
 import pytest
 
@@ -64,3 +65,16 @@ def test_activate_needs_an_existing_shell(monkeypatch: pytest.MonkeyPatch, tmp_p
     monkeypatch.setattr(sys, "platform", "win32")
     monkeypatch.setenv("AFNI_POSIX_SHELL", str(tmp_path / "missing-sh.exe"))
     assert module.activate() is False
+
+
+def test_path_functions_return_forward_slashes(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Dataset paths built by afnipy keep '/' on Windows, as on Linux."""
+    module = _load()
+    for name in module.PATH_FUNCTIONS:
+        monkeypatch.setattr(ntpath, name, getattr(ntpath, name))
+    fake_os = SimpleNamespace(getcwd=lambda: "D:\\a\\work")
+    module.install_forward_slash_paths(ntpath, fake_os)
+    assert ntpath.join("D:\\a\\data", "sub-01.nii.gz") == "D:/a/data/sub-01.nii.gz"
+    assert ntpath.normpath("D:/a/b/../c") == "D:/a/c"
+    assert fake_os.getcwd() == "D:/a/work"
+    assert module.forward_slashes(3) == 3
