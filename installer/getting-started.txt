@@ -1,32 +1,39 @@
 AFNI for Windows - getting started
 ==================================
 
-AFNI is a collection of command-line programs for analysing brain MRI data.
-There are no windows to click: you type commands, and the programs read and
-write data files.
+AFNI is a collection of command-line programs and scripts for analysing brain
+MRI data. There are no windows to click: you type commands, and the programs
+read and write data files.
 
 After installation
 ------------------
 
-1. Open the Start menu and choose "AFNI Command Prompt".
-   A black window opens; AFNI programs work there.
+1. Open the Start menu and choose "AFNI Shell" (a tcsh prompt, as in the
+   AFNI documentation and courses) or "AFNI Command Prompt" (Windows cmd).
 
-2. Go to the folder with your data, for example:
+2. Go to the folder with your data. The path must not contain spaces:
 
-       cd /d C:\Users\YourName\Documents\mri
+       cd C:/data/mri            (AFNI Shell)
+       cd /d C:\data\mri         (AFNI Command Prompt)
 
-3. Run a program, for example:
+3. Run a program or a script, for example:
 
        3dinfo anat+orig
-       3dcalc -help
+       afni_proc.py -help
+       tcsh -xef proc.subj
 
 Good to know
 ------------
 
+- Paths with spaces (for example "My Documents") are not supported by AFNI,
+  on Windows as on Linux. Keep data in folders such as C:\data.
+- Folder and file names with other letters (for example Cyrillic) work.
 - In AFNI commands, write paths with forward slashes: C:/data/anat+orig
-- If you chose "Add AFNI to PATH", AFNI also works in any new Command Prompt
-  or PowerShell window.
-- The graphical viewer (afni) and SUMA are not part of this package.
+- If you chose "Add AFNI to PATH", AFNI programs and scripts also start from
+  any new Command Prompt or PowerShell window.
+- The graphical viewer (afni), SUMA and the HTML quality-control report of
+  afni_proc.py are not part of this package; run afni_proc.py with
+  "-html_review_style none".
 - Documentation and tutorials: https://afni.nimh.nih.gov/
 - To remove AFNI: Settings > Apps > Installed apps > AFNI for Windows > Uninstall.
 

@@ -5,7 +5,9 @@
 ;
 ; Installs for the current user by default (no administrator rights); the
 ; wizard offers an installation for all users. Optionally adds the program
-; directory to PATH and removes it again on uninstall.
+; directory to PATH and removes it again on uninstall. The default folder is
+; C:\AFNI: the AFNI scripts do not support paths with spaces (D34), so the
+; wizard refuses a folder whose path contains one.
 
 #ifndef AppVersion
   #error AppVersion is required
@@ -34,7 +36,7 @@ AppPublisher=afni-win project
 AppPublisherURL=https://github.com/notaskynet/afni-win
 AppSupportURL=https://github.com/notaskynet/afni-win/issues
 VersionInfoVersion={#NumericVersion}
-DefaultDirName={autopf}\AFNI
+DefaultDirName={sd}\AFNI
 DefaultGroupName=AFNI
 DisableProgramGroupPage=yes
 PrivilegesRequired=lowest
@@ -59,7 +61,7 @@ Name: "ru"; MessagesFile: "compiler:Languages\Russian.isl"
 
 [Tasks]
 Name: "addtopath"; Description: "Add AFNI to PATH (AFNI programs work in every Command Prompt and PowerShell window)"
-Name: "desktopicon"; Description: "Create a desktop shortcut to the AFNI Command Prompt"; Flags: unchecked
+Name: "desktopicon"; Description: "Create a desktop shortcut to the AFNI Shell"; Flags: unchecked
 
 [Files]
 Source: "{#SourceDir}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
@@ -67,15 +69,16 @@ Source: "afni-shell.cmd"; DestDir: "{app}"; Flags: ignoreversion
 Source: "getting-started.txt"; DestDir: "{app}"; Flags: ignoreversion
 
 [Icons]
-Name: "{group}\AFNI Command Prompt"; Filename: "{cmd}"; Parameters: "/k ""{app}\afni-shell.cmd"""; WorkingDir: "{userdocs}"; Comment: "Command prompt with the AFNI programs"
+Name: "{group}\AFNI Shell"; Filename: "{cmd}"; Parameters: "/c ""{app}\afni-tcsh.cmd"""; WorkingDir: "{sd}\"; Comment: "tcsh prompt with the AFNI programs and scripts"
+Name: "{group}\AFNI Command Prompt"; Filename: "{cmd}"; Parameters: "/k ""{app}\afni-shell.cmd"""; WorkingDir: "{sd}\"; Comment: "Command prompt with the AFNI programs and scripts"
 Name: "{group}\Getting started"; Filename: "{app}\getting-started.txt"
 Name: "{group}\AFNI documentation"; Filename: "https://afni.nimh.nih.gov/"
 Name: "{group}\Uninstall {#AppName}"; Filename: "{uninstallexe}"
-Name: "{autodesktop}\AFNI Command Prompt"; Filename: "{cmd}"; Parameters: "/k ""{app}\afni-shell.cmd"""; WorkingDir: "{userdocs}"; Tasks: desktopicon
+Name: "{autodesktop}\AFNI Shell"; Filename: "{cmd}"; Parameters: "/c ""{app}\afni-tcsh.cmd"""; WorkingDir: "{sd}\"; Tasks: desktopicon
 
 [Run]
 Filename: "{app}\getting-started.txt"; Description: "Open the getting-started notes"; Flags: postinstall shellexec skipifsilent nowait
-Filename: "{cmd}"; Parameters: "/k ""{app}\afni-shell.cmd"""; WorkingDir: "{userdocs}"; Description: "Open the AFNI Command Prompt"; Flags: postinstall skipifsilent nowait unchecked
+Filename: "{cmd}"; Parameters: "/c ""{app}\afni-tcsh.cmd"""; WorkingDir: "{sd}\"; Description: "Open the AFNI Shell"; Flags: postinstall skipifsilent nowait unchecked
 
 [Code]
 const
@@ -131,6 +134,17 @@ begin
   Delete(Path, P, Length(Dir) + 1);
   Path := Copy(Path, 2, Length(Path) - 2);
   RegWriteExpandStringValue(EnvironmentRoot, EnvironmentKey, 'Path', Path);
+end;
+
+function NextButtonClick(CurPageID: Integer): Boolean;
+begin
+  Result := True;
+  if (CurPageID = wpSelectDir) and (Pos(' ', WizardDirValue) > 0) then
+  begin
+    MsgBox('AFNI does not support folders whose path contains a space.' + #13#10 +
+           'Please choose a folder such as C:\AFNI.', mbError, MB_OK);
+    Result := False;
+  end;
 end;
 
 procedure CurStepChanged(CurStep: TSetupStep);
