@@ -47,7 +47,7 @@ jobs:
           sudo apt-get install -y ninja-build zlib1g-dev libexpat1-dev libqhull-dev libjpeg-dev \
             libmotif-dev libxt-dev libxmu-dev libxpm-dev libxi-dev libjpeg-progs \
             freeglut3-dev libglu1-mesa-dev libglw1-mesa-dev libgsl-dev \
-            tcsh python3-numpy python3-matplotlib
+            libglib2.0-dev tcsh python-is-python3 python3-numpy python3-matplotlib netpbm
 
       - name: Build the pipeline programs with the official CMake build
         env:
@@ -165,6 +165,31 @@ jobs:
         run: |
           export PATH="$PWD/afni-bin:$PATH" PYTHONPATH="$(cygpath -w "$PWD/afni-bin")"
           bash tests/scripts/run_pipeline.sh "$PWD/data" "$PWD/inputs" "$PWD/work" "$PWD/results/windows"
+
+      # Strategy B probe: tcsh's own native Windows port (win32/, MSVC), same
+      # start-cost benchmark. Best effort: a failure here is a result.
+      - uses: ilammy/msvc-dev-cmd@v1
+
+      - name: Build native tcsh (win32 port, MSVC)
+        id: tcsh_native
+        continue-on-error: true
+        shell: cmd
+        run: |
+          git clone --depth 1 --branch TCSH6_24_16 https://github.com/tcsh-org/tcsh.git tcsh-native
+          cd tcsh-native
+          copy /Y system\win32 config.h
+          copy /Y win32\Makefile.win32 Makefile.win32
+          nmake -nologo -f Makefile.win32
+          dir *.exe
+
+      - name: Process start cost under native tcsh
+        if: steps.tcsh_native.outcome == 'success'
+        continue-on-error: true
+        run: |
+          export PATH="$PWD/afni-bin:$PATH" PYTHONPATH="$(cygpath -w "$PWD/afni-bin")"
+          tcsh_exe=$(ls tcsh-native/*.exe | head -1)
+          mkdir -p results/windows/native-tcsh && cd results/windows/native-tcsh
+          "../../../$tcsh_exe" -f ../../../tests/scripts/bench_spawn.tcsh "$BENCH_N" 2>&1 | tee ../bench-native-tcsh.txt
 
       - uses: actions/upload-artifact@v4
         if: always()
