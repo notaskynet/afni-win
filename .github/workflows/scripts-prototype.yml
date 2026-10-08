@@ -270,8 +270,10 @@ jobs:
             done
             echo
           } | tee -a "$GITHUB_STEP_SUMMARY"
+          mkdir -p prototype-linux/outputs/logs
           for v in cmd-shell posix-shell posix-shell-defender; do
             if [ -d "prototype-windows-$v/outputs" ]; then
+              mkdir -p "prototype-windows-$v/outputs/logs"
               uv run --frozen python -m tests.regression.compare --reference prototype-linux/outputs \
                 --candidate "prototype-windows-$v/outputs" --report "comparison-$v.md" || true
               { echo "### Variant $v"; cat "comparison-$v.md"; } | tee -a "$GITHUB_STEP_SUMMARY"
