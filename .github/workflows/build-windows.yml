@@ -1,16 +1,24 @@
 name: build-windows
 
-# Minimal version brought forward from phase 4 (docs/DECISIONS.md, D17):
-# build one upstream tag on Windows (MSYS2 UCRT64), run 3dinfo/3dcalc/3dTstat
-# on the same data as a Linux build of the same tag, compare bit for bit.
+# Builds one upstream AFNI tag for Windows (MSYS2 UCRT64), checks it against
+# the official Linux CMake build of the same tag and, with publish=true,
+# publishes the GitHub release <tag>-win. watch-upstream-tags.yml starts it
+# for new tags with publish=true. A publishing run that fails opens the issue
+# "Build failed: <tag>", after which the watcher no longer starts that tag.
+
+run-name: build ${{ inputs.tag || 'baseline tag' }}${{ inputs.publish && ' (publish)' || '' }}
 
 on:
   workflow_dispatch:
     inputs:
       tag:
-        description: Upstream AFNI tag
-        required: true
-        default: AFNI_26.2.09
+        description: Upstream AFNI tag (empty = manifests/upstream-baseline.txt)
+        required: false
+        default: ''
+      publish:
+        description: Publish the GitHub release <tag>-win
+        type: boolean
+        default: false
   push:
     branches: [main]
     paths:
@@ -19,60 +27,109 @@ on:
       - patches/**
       - tools/**
       - tests/**
+      - manifests/**
+      - pyproject.toml
+      - uv.lock
       - .github/workflows/build-windows.yml
 
+permissions:
+  contents: read
+
+concurrency:
+  group: build-windows-${{ inputs.tag || github.ref }}
+  cancel-in-progress: false
+
 env:
-  AFNI_TAG: ${{ inputs.tag || 'AFNI_26.2.09' }}
   AFNI_UPSTREAM: https://github.com/afni/afni.git
+  BUSYBOX_URL: https://frippery.org/files/busybox/busybox-w64u-FRP-6075-g169694ebd.exe
+  BUSYBOX_FALLBACK_URL: https://frippery.org/files/busybox/busybox64u.exe
+  BUSYBOX_SHA256: 6e263d154d8548d1eb936f65d1d8312c80df31c45974e48d6335e4dcc0f4f34c
 
 jobs:
-  linux-reference:
+  python-checks:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      - name: Lint, type-check and unit-test the Python tools
+        run: |
+          uv run --frozen ruff check .
+          uv run --frozen ruff format --check .
+          uv run --frozen ty check tools tests
+          uv run --frozen pytest -q tests
+
+  linux-reference:
+    runs-on: ubuntu-24.04
+    outputs:
+      tag: ${{ steps.tag.outputs.tag }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - id: tag
+        name: Select the upstream tag
+        env:
+          INPUT_TAG: ${{ inputs.tag }}
+        run: echo "tag=${INPUT_TAG:-$(cat manifests/upstream-baseline.txt)}" >> "$GITHUB_OUTPUT"
 
       - name: Install build dependencies
-        run: sudo apt-get update && sudo apt-get install -y ninja-build zlib1g-dev libexpat1-dev
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ninja-build zlib1g-dev libexpat1-dev libqhull-dev libjpeg-dev \
+            libmotif-dev libxt-dev libxmu-dev libxpm-dev libxi-dev libjpeg-progs
 
       - name: Fetch upstream
-        run: git clone --depth 1 --branch "$AFNI_TAG" "$AFNI_UPSTREAM" upstream
+        run: git -c advice.detachedHead=false clone --depth 1 --branch "${{ steps.tag.outputs.tag }}" "$AFNI_UPSTREAM" upstream
 
-      - name: Build reference programs
+      # Official upstream CMake build (.docker/cmake_build.dockerfile: COMP_GUI=ON),
+      # without SUMA, Python and tcsh, which are out of scope. NIfTI and GIFTI come
+      # from the same in-tree sources as on Windows (docs/DECISIONS.md, D17, D4a).
+      - name: Build the required programs
         env:
           CC: gcc
           CXX: g++
         run: |
           cmake -S upstream -B build-linux -G Ninja \
-            -DCMAKE_BUILD_TYPE=Release \
-            -DCOMP_GUI=OFF -DCOMP_PYTHON=OFF -DCOMP_TCSH=OFF \
-            -DREMOVE_BUILD_PARITY_CHECKS=ON -DUSE_OMP=ON \
+            -DCMAKE_BUILD_TYPE=Release -DCOMP_GUI=ON -DCOMP_SUMA=OFF \
+            -DCOMP_PYTHON=OFF -DCOMP_TCSH=OFF -DREMOVE_BUILD_PARITY_CHECKS=ON -DUSE_OMP=ON \
             -DFETCHCONTENT_SOURCE_DIR_NIFTI_CLIB="$PWD/upstream/src/nifti" \
             -DFETCHCONTENT_SOURCE_DIR_GIFTI_CLIB="$PWD/cmake/gifti"
-          mapfile -t targets < tests/regression/smoke-programs.txt
+          mapfile -t targets < <(grep -v '^#' manifests/programs-required.txt)
           cmake --build build-linux --target "${targets[@]}"
 
       - uses: astral-sh/setup-uv@v6
 
-      - name: Generate data and run the scenario
+      - name: Generate data and run the regression scenario
         run: |
-          uv run --frozen python -m tests.regression.smoke prepare \
-            --bin-dir build-linux/targets_built --out-dir smoke/data
-          uv run --frozen python -m tests.regression.smoke run \
-            --bin-dir build-linux/targets_built --data-dir smoke/data --out-dir smoke/linux
+          uv run --frozen python -m tests.regression.scenario prepare \
+            --bin-dir build-linux/targets_built --out-dir regression/data
+          uv run --frozen python -m tests.regression.scenario run \
+            --bin-dir build-linux/targets_built --data-dir regression/data --out-dir regression/linux
+
+      - name: Record POSIX call sites of the tag
+        run: |
+          uv run --frozen python -m tools.posix_diff scan --tag "${{ steps.tag.outputs.tag }}" \
+            --source-dir upstream/src --output posix-callsites.json
 
       - uses: actions/upload-artifact@v4
         with:
-          name: smoke-data
-          path: smoke/data
+          name: regression-data
+          path: regression/data
 
       - uses: actions/upload-artifact@v4
         with:
-          name: smoke-linux
-          path: smoke/linux
+          name: regression-linux
+          path: regression/linux
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: posix-callsites
+          path: posix-callsites.json
 
   windows:
     needs: linux-reference
     runs-on: windows-latest
+    env:
+      AFNI_TAG: ${{ needs.linux-reference.outputs.tag }}
     defaults:
       run:
         shell: msys2 {0}
@@ -85,43 +142,66 @@ jobs:
           update: true
           install: git make
           pacboy: >-
-            gcc:p cmake:p ninja:p zlib:p expat:p qhull:p
+            gcc:p cmake:p ninja:p zlib:p expat:p qhull:p libjpeg-turbo:p
             python:p python-pydantic:p
 
-      - name: Record toolchain versions
+      - name: Record toolchain and runtime package versions
         run: |
           gcc --version | head -1
           cmake --version | head -1
-          pacman -Q mingw-w64-ucrt-x86_64-gcc mingw-w64-ucrt-x86_64-crt-git mingw-w64-ucrt-x86_64-zlib \
-            mingw-w64-ucrt-x86_64-expat mingw-w64-ucrt-x86_64-qhull || true
+          pacman -Q mingw-w64-ucrt-x86_64-gcc mingw-w64-ucrt-x86_64-gcc-libs mingw-w64-ucrt-x86_64-crt-git \
+            mingw-w64-ucrt-x86_64-libwinpthread mingw-w64-ucrt-x86_64-zlib mingw-w64-ucrt-x86_64-expat \
+            mingw-w64-ucrt-x86_64-qhull mingw-w64-ucrt-x86_64-libjpeg-turbo | tee msys2-packages.txt
+          echo "busybox-w32 $BUSYBOX_URL sha256 $BUSYBOX_SHA256" | tee -a msys2-packages.txt
+
+      - name: Fetch busybox-w32 (pinned by sha256)
+        run: |
+          curl -fsSL -o busybox64u.exe "$BUSYBOX_URL" || curl -fsSL -o busybox64u.exe "$BUSYBOX_FALLBACK_URL"
+          echo "$BUSYBOX_SHA256  busybox64u.exe" | sha256sum -c -
 
       - name: Compat layer unit tests
         run: |
           cmake -S compat -B build-compat -G Ninja \
-            -DCMAKE_TOOLCHAIN_FILE="$PWD/cmake/toolchain-mingw.cmake" -DCMAKE_BUILD_TYPE=Release
+            -DCMAKE_TOOLCHAIN_FILE="$PWD/cmake/toolchain-mingw.cmake" -DCMAKE_BUILD_TYPE=Release \
+            -DAFNI_COMPAT_BUSYBOX="$PWD/busybox64u.exe"
           cmake --build build-compat
           ctest --test-dir build-compat --output-on-failure
 
-      - name: Build AFNI
+      - name: Build AFNI (required programs must build, optional ones are best effort)
         run: |
           python -m tools.build --tag "$AFNI_TAG" --upstream-url "$AFNI_UPSTREAM" \
-            --work-dir build-win --manifest tests/regression/smoke-programs.txt
+            --work-dir build-win --optional-manifest manifests/programs-optional.txt \
+            --optional-manifest manifests/models-optional.txt
+
+      - name: Package
+        run: |
+          python -m tools.package --build-dir build-win --source-dir build-win/upstream \
+            --runtime-dir "$(cygpath -w /ucrt64/bin)" --busybox busybox64u.exe --output-dir dist
 
       - uses: actions/download-artifact@v4
         with:
-          name: smoke-data
-          path: smoke/data
+          name: regression-data
+          path: regression/data
 
-      - name: Run the scenario
+      # Runs the programs from the package with PATH limited to the package and
+      # the Windows system directories, so a missing DLL or helper fails here.
+      - name: Run the regression scenario from the package
         run: |
-          python -m tests.regression.smoke run \
-            --bin-dir build-win/build/targets_built --data-dir smoke/data --out-dir smoke/windows
+          python -m tests.regression.scenario run --isolated-path \
+            --bin-dir "dist/afni-$AFNI_TAG-win64" --data-dir regression/data --out-dir regression/windows
 
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: smoke-windows
-          path: smoke/windows
+          name: regression-windows
+          path: regression/windows
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: package
+          path: |
+            dist/*.zip
+            dist/package.json
 
       - uses: actions/upload-artifact@v4
         if: always()
@@ -131,36 +211,136 @@ jobs:
             build-win/build-result.json
             build-win/build/build.log
             build-win/build/CMakeCache.txt
+            msys2-packages.txt
 
   compare:
     needs: [linux-reference, windows]
     runs-on: ubuntu-24.04
+    env:
+      AFNI_TAG: ${{ needs.linux-reference.outputs.tag }}
+      GH_TOKEN: ${{ github.token }}
     steps:
       - uses: actions/checkout@v4
 
       - uses: actions/download-artifact@v4
         with:
-          name: smoke-linux
-          path: smoke/linux
+          name: regression-linux
+          path: regression/linux
 
       - uses: actions/download-artifact@v4
         with:
-          name: smoke-windows
-          path: smoke/windows
+          name: regression-windows
+          path: regression/windows
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: posix-callsites
+          path: posix
 
       - uses: astral-sh/setup-uv@v6
+
+      - name: Report POSIX API changes since the previous release
+        run: |
+          gh release list --limit 1000 --json tagName > releases.json
+          previous=$(uv run --frozen python -m tools.upstream_tags previous --tag "$AFNI_TAG" --released releases.json)
+          if [ -n "$previous" ]; then
+            gh release download "$previous-win" --pattern posix-callsites.json --dir posix-previous || true
+          fi
+          uv run --frozen python -m tools.posix_diff diff --previous posix-previous/posix-callsites.json \
+            --current posix/posix-callsites.json --report posix-diff.md
+          cat posix-diff.md >> "$GITHUB_STEP_SUMMARY"
 
       - name: Compare Linux and Windows outputs
         run: |
           set +e
           uv run --frozen python -m tests.regression.compare \
-            --reference smoke/linux --candidate smoke/windows --report report.md
+            --reference regression/linux --candidate regression/windows \
+            --report comparison.md --json-report comparison.json
           status=$?
-          cat report.md >> "$GITHUB_STEP_SUMMARY"
+          cat comparison.md >> "$GITHUB_STEP_SUMMARY"
           exit $status
 
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: comparison-report
-          path: report.md
+          name: comparison
+          path: |
+            comparison.md
+            comparison.json
+            posix-diff.md
+
+  release:
+    needs: [linux-reference, windows, compare]
+    if: ${{ inputs.publish }}
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+      issues: write
+    env:
+      AFNI_TAG: ${{ needs.linux-reference.outputs.tag }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - uses: astral-sh/setup-uv@v6
+
+      - name: Publish the release
+        run: |
+          if gh release view "$AFNI_TAG-win" > /dev/null 2>&1; then
+            echo "Release $AFNI_TAG-win already exists; nothing to do."
+            exit 0
+          fi
+          uv run --frozen python -m tools.release_notes \
+            --build-result artifacts/build-windows-logs/build-win/build-result.json \
+            --package artifacts/package/package.json \
+            --comparison artifacts/comparison/comparison.md \
+            --posix-diff artifacts/comparison/posix-diff.md \
+            --packages artifacts/build-windows-logs/msys2-packages.txt \
+            --commit "$GITHUB_SHA" --output notes.md
+          gh release create "$AFNI_TAG-win" --target "$GITHUB_SHA" \
+            --title "AFNI $AFNI_TAG for Windows" --notes-file notes.md \
+            artifacts/package/*.zip artifacts/package/package.json \
+            artifacts/comparison/comparison.md artifacts/posix-callsites/posix-callsites.json \
+            artifacts/build-windows-logs/build-win/build-result.json
+
+      - name: Close the failure issue of this tag
+        run: |
+          gh issue list --label build-failed --state open --search "\"Build failed: $AFNI_TAG\" in:title" \
+            --json number --jq '.[].number' | while read -r n; do
+            gh issue close "$n" --comment "Built and released by $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
+          done
+
+  record-failure:
+    needs: [linux-reference, windows, compare]
+    if: ${{ failure() && inputs.publish }}
+    runs-on: ubuntu-24.04
+    permissions:
+      issues: write
+    env:
+      AFNI_TAG: ${{ needs.linux-reference.outputs.tag || inputs.tag }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Mark the tag as failed
+        run: |
+          AFNI_TAG=${AFNI_TAG:-$(cat manifests/upstream-baseline.txt)}
+          title="Build failed: $AFNI_TAG"
+          existing=$(gh issue list --repo "$GITHUB_REPOSITORY" --label build-failed --state all \
+            --search "\"$title\" in:title" --json title --jq ".[] | select(.title == \"$title\") | .title")
+          run_url="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
+          if [ -n "$existing" ]; then
+            echo "Issue for $AFNI_TAG already exists."
+            exit 0
+          fi
+          gh label create build-failed --repo "$GITHUB_REPOSITORY" --color B60205 \
+            --description "Upstream tag that failed to build" --force
+          gh issue create --repo "$GITHUB_REPOSITORY" --label build-failed --title "$title" \
+            --body "The publishing build of $AFNI_TAG failed: $run_url
+
+          watch-upstream-tags.yml does not start this tag again while this issue exists (open or closed).
+          After a fix, start build-windows.yml manually with tag=$AFNI_TAG and publish=true."
