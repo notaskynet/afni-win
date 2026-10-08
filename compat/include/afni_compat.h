@@ -173,6 +173,10 @@ AFNI_COMPAT_API int afni_compat_close(int fd);
 int afni_compat_close(int fd);
 #endif
 
+/* fopen() with POSIX semantics: binary unless the mode asks for text ("t"),
+   whatever _fmode the host process has (src/stdio.c). */
+AFNI_COMPAT_API FILE *afni_compat_fopen(const char *path, const char *mode);
+
 /* ---- sys/file.h ---- */
 
 #define LOCK_SH 1
@@ -251,6 +255,7 @@ AFNI_COMPAT_API int kill(pid_t pid, int sig);
 #define system(command) afni_compat_system(command)
 #ifndef __cplusplus
 #define close(fd) afni_compat_close(fd)
+#define fopen(path, mode) afni_compat_fopen((path), (mode))
 #endif
 #endif
 
