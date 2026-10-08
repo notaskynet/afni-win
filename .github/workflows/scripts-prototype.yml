@@ -127,7 +127,7 @@ jobs:
           install: git make tcsh
           pacboy: >-
             gcc:p cmake:p ninja:p zlib:p expat:p qhull:p libjpeg-turbo:p
-            python:p python-pydantic:p python-numpy:p python-matplotlib:p
+            gsl:p python:p python-pydantic:p python-numpy:p python-matplotlib:p
 
       - name: Record versions
         run: |
@@ -145,7 +145,8 @@ jobs:
           extra=()
           for p in $EXTRA_PROGRAMS; do extra+=(--extra-program "$p"); done
           python -m tools.build --tag "$AFNI_TAG" --upstream-url "$AFNI_UPSTREAM" \
-            --work-dir build-win --optional-manifest tests/scripts/ap-programs.txt "${extra[@]}" || true
+            --work-dir build-win --optional-manifest tests/scripts/ap-programs.txt "${extra[@]}" \
+            --cmake-define AFNI_WIN_PTAYLOR=ON || true
           python -c "import json; r = json.load(open('build-win/build-result.json')); print('optional missing:', r['optional_missing'], 'undefined:', r['optional_undefined'])"
 
       - name: Package and assemble programs and scripts
@@ -178,13 +179,21 @@ jobs:
       - uses: ilammy/msvc-dev-cmd@v1
         if: matrix.variant == 'cmd-shell'
 
+      - name: Fetch native tcsh sources
+        if: matrix.variant == 'cmd-shell'
+        continue-on-error: true
+        run: |
+          git clone --depth 1 --branch TCSH6_24_16 https://github.com/tcsh-org/tcsh.git tcsh-native
+          sed -e 's/@PACKAGE_ORIGIN@/Astron/' -e 's/@PACKAGE_REV@/6/' -e 's/@PACKAGE_VERS@/24/' \
+            -e 's/@PACKAGE_PATCHLEVEL@/16/' -e 's/@PACKAGE_DATE@/2025-07-09/' \
+            tcsh-native/patchlevel.h.in > tcsh-native/patchlevel.h
+
       - name: Build native tcsh (win32 port, MSVC)
         id: tcsh_native
         if: matrix.variant == 'cmd-shell'
         continue-on-error: true
         shell: cmd
         run: |
-          git clone --depth 1 --branch TCSH6_24_16 https://github.com/tcsh-org/tcsh.git tcsh-native
           cd tcsh-native
           copy /Y system\win32 config.h
           copy /Y win32\Makefile.win32 Makefile.win32
