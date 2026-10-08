@@ -111,9 +111,9 @@ def test_compare_without_logs_directory(tmp_path: Path) -> None:
 
 def test_log_tail_keeps_the_last_lines() -> None:
     """Only the end of a long log reaches the CI output."""
-    raw = "".join(f"line {i}\n" for i in range(100)).encode()
+    raw = "".join(f"line {i}\n" for i in range(400)).encode()
     tail = log_tail(raw)
-    assert tail.splitlines()[0] == "line 60" and tail.endswith("line 99")
+    assert tail.splitlines()[0] == "line 100" and tail.endswith("line 399")
     assert log_tail(b"\xff") == "\ufffd"
 
 

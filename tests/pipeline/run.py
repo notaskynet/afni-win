@@ -51,7 +51,7 @@ GROUP_SCRIPT = HERE / "group.tcsh"
 TEMPLATE = "MNI_brain.nii.gz"
 CLUSTSIM_SUBJECTS: frozenset[str] = frozenset({"08"})
 TIMING_FILE = "timing.json"
-LOG_TAIL_LINES = 40
+LOG_TAIL_LINES = 300
 PYTHON_VARIABLES: frozenset[str] = frozenset({"PYTHONPATH", "PYTHONHOME", "VIRTUAL_ENV"})
 WINDOWS_DROPPED_VARIABLES: frozenset[str] = PYTHON_VARIABLES | {
     "HOME",
