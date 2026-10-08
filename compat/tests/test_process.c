@@ -119,6 +119,14 @@ int main(void) {
     remove("compat_process_many.txt");
   }
 
+  CHECK(nice(5) == 5);
+  CHECK(GetPriorityClass(GetCurrentProcess()) == BELOW_NORMAL_PRIORITY_CLASS);
+  CHECK(nice(10) == 15);
+  CHECK(GetPriorityClass(GetCurrentProcess()) == IDLE_PRIORITY_CLASS);
+  CHECK(nice(100) == 19);
+  CHECK(nice(-19) == 0);
+  CHECK(GetPriorityClass(GetCurrentProcess()) == NORMAL_PRIORITY_CLASS);
+
   CHECK(times(&t) != (clock_t)-1);
   CHECK(t.tms_cutime >= 0);
 
