@@ -75,26 +75,34 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y ninja-build zlib1g-dev libexpat1-dev libqhull-dev libjpeg-dev \
-            libmotif-dev libxt-dev libxmu-dev libxpm-dev libxi-dev libjpeg-progs
+            libmotif-dev libxt-dev libxmu-dev libxpm-dev libxi-dev libjpeg-progs \
+            freeglut3-dev libglu1-mesa-dev libglw1-mesa-dev libgsl-dev libglib2.0-dev
 
       - name: Fetch upstream
         run: git -c advice.detachedHead=false clone --depth 1 --branch "${{ steps.tag.outputs.tag }}" "$AFNI_UPSTREAM" upstream
 
       # Official upstream CMake build (.docker/cmake_build.dockerfile: COMP_GUI=ON),
-      # without SUMA, Python and tcsh, which are out of scope. NIfTI and GIFTI come
-      # from the same in-tree sources as on Windows (docs/DECISIONS.md, D17, D4a).
+      # with SUMA for 3dSkullStrip and the src/ptaylor programs; Python and tcsh
+      # scripts are not built (out of scope here). NIfTI and GIFTI come from the
+      # same in-tree sources as on Windows (docs/DECISIONS.md, D17, D4a). The
+      # programs that only src/Makefile.INCLUDE builds are added with
+      # cmake/afni-extra-programs.cmake, as on Windows (D33).
       - name: Build the required programs
         env:
           CC: gcc
           CXX: g++
         run: |
+          mapfile -t extra < <(sed 's/#.*//' manifests/programs-extra.txt | awk 'NF {print $1}')
           cmake -S upstream -B build-linux -G Ninja \
-            -DCMAKE_BUILD_TYPE=Release -DCOMP_GUI=ON -DCOMP_SUMA=OFF \
+            -DCMAKE_BUILD_TYPE=Release -DCOMP_GUI=ON -DCOMP_SUMA=ON \
             -DCOMP_PYTHON=OFF -DCOMP_TCSH=OFF -DREMOVE_BUILD_PARITY_CHECKS=ON -DUSE_OMP=ON \
             -DFETCHCONTENT_SOURCE_DIR_NIFTI_CLIB="$PWD/upstream/src/nifti" \
-            -DFETCHCONTENT_SOURCE_DIR_GIFTI_CLIB="$PWD/cmake/gifti"
-          mapfile -t targets < <(grep -v '^#' manifests/programs-required.txt)
-          cmake --build build-linux --target "${targets[@]}"
+            -DFETCHCONTENT_SOURCE_DIR_GIFTI_CLIB="$PWD/cmake/gifti" \
+            -DCMAKE_PROJECT_AFNI_INCLUDE="$PWD/cmake/afni-extra-programs.cmake" \
+            "-DAFNI_WIN_EXTRA_PROGRAMS=$(IFS=';'; echo "${extra[*]}")"
+          mapfile -t targets < <(cat manifests/programs-required.txt manifests/programs-pipeline.txt \
+            | sed 's/#.*//' | awk 'NF {print $1}')
+          cmake --build build-linux --target "${targets[@]}" "${extra[@]}"
 
       - uses: astral-sh/setup-uv@v6
 
@@ -140,9 +148,9 @@ jobs:
         with:
           msystem: UCRT64
           update: true
-          install: git make
+          install: git make zstd
           pacboy: >-
-            gcc:p cmake:p ninja:p zlib:p expat:p qhull:p libjpeg-turbo:p
+            gcc:p cmake:p ninja:p zlib:p expat:p qhull:p libjpeg-turbo:p gsl:p
             python:p python-pydantic:p
 
       - name: Record toolchain and runtime package versions
@@ -151,7 +159,8 @@ jobs:
           cmake --version | head -1
           pacman -Q mingw-w64-ucrt-x86_64-gcc mingw-w64-ucrt-x86_64-gcc-libs mingw-w64-ucrt-x86_64-crt-git \
             mingw-w64-ucrt-x86_64-libwinpthread mingw-w64-ucrt-x86_64-zlib mingw-w64-ucrt-x86_64-expat \
-            mingw-w64-ucrt-x86_64-qhull mingw-w64-ucrt-x86_64-libjpeg-turbo | tee msys2-packages.txt
+            mingw-w64-ucrt-x86_64-qhull mingw-w64-ucrt-x86_64-libjpeg-turbo mingw-w64-ucrt-x86_64-gsl \
+            | tee msys2-packages.txt
           echo "busybox-w32 $BUSYBOX_URL sha256 $BUSYBOX_SHA256" | tee -a msys2-packages.txt
 
       - name: Fetch busybox-w32 (pinned by sha256)
@@ -167,11 +176,18 @@ jobs:
           cmake --build build-compat
           ctest --test-dir build-compat --output-on-failure
 
+      # X11/Motif/OpenGL headers (Ubuntu packages, sha512-pinned) for the
+      # X-free builds of 3dSkullStrip and 1dplot (cmake/afni-nox.cmake, D35).
+      - name: Fetch X11 headers
+        run: python -m tools.x_headers --output-dir x-headers
+
       - name: Build AFNI (required programs must build, optional ones are best effort)
         run: |
           python -m tools.build --tag "$AFNI_TAG" --upstream-url "$AFNI_UPSTREAM" \
             --work-dir build-win --optional-manifest manifests/programs-optional.txt \
-            --optional-manifest manifests/models-optional.txt
+            --optional-manifest manifests/models-optional.txt \
+            --cmake-define AFNI_WIN_PTAYLOR=ON --cmake-define AFNI_WIN_NOX=ON \
+            --cmake-define "AFNI_WIN_X_HEADERS=$(cygpath -m "$PWD/x-headers")"
 
       - name: Package
         run: |
