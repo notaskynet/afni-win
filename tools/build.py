@@ -39,6 +39,7 @@ class BuildConfig(BaseModel):
     optional_manifests: list[Path] = Field(default_factory=list)
     extra_targets: list[str] = Field(default_factory=list)
     extra_programs: list[str] = Field(default_factory=list)
+    cmake_defines: list[str] = Field(default_factory=list)
     patches_dir: Path = REPO_ROOT / "patches"
     toolchain: Path = REPO_ROOT / "cmake" / "toolchain-mingw.cmake"
     skip_fetch: bool = False
@@ -177,6 +178,7 @@ def configure(config: BuildConfig, source: Path) -> Path:
             f"-DFETCHCONTENT_SOURCE_DIR_NIFTI_CLIB={source / 'src' / 'nifti'}",
             f"-DFETCHCONTENT_SOURCE_DIR_GIFTI_CLIB={REPO_ROOT / 'cmake' / 'gifti'}",
             f"-DAFNI_WIN_EXTRA_PROGRAMS={';'.join(config.extra_programs)}",
+            *(f"-D{define}" for define in config.cmake_defines),
         ]
     )
     return build
@@ -341,6 +343,13 @@ def _parse_args() -> BuildConfig:
         action="append",
         default=[],
         help="single-file upstream program without a CMake target (built as optional)",
+    )
+    parser.add_argument(
+        "--cmake-define",
+        dest="cmake_defines",
+        action="append",
+        default=[],
+        help="extra NAME=VALUE cache entry for the upstream configure step",
     )
     parser.add_argument("--skip-fetch", action="store_true")
     parser.add_argument("--skip-patch", action="store_true")
