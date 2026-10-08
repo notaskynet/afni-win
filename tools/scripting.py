@@ -8,6 +8,8 @@ Runs inside MSYS2 after ``tools.package`` has assembled the programs. It adds:
   the user's temporary directory;
 - ``python/``: the UCRT64 Python with numpy and matplotlib, ``afnipy`` and the
   shell shim ``afni_win_posix_shell`` in its ``site-packages``;
+- ``R/``: the R installed by ``tools.r_runtime`` (with its CRAN packages), and
+  ``scripts/R_io.so`` for ``AFNIio.R``;
 - ``afni-env.cmd``, ``afni-tcsh.cmd``, ``tcsh.cmd`` and one ``<script>.cmd``
   launcher per script, so that scripts also start from ``cmd.exe``.
 
@@ -39,6 +41,8 @@ EXCLUDED = re.compile(
 SCRIPT_DIRS: tuple[str, ...] = (
     "src/scripts_install",
     "src/python_scripts/scripts",
+    "src/scripts_for_r",
+    "src/R_scripts",
 )
 FSTAB = (
     "# afni-win: MSYS2 mount table of the AFNI scripting runtime\n"
@@ -63,7 +67,8 @@ if not "%CD%"=="%CD: =%" (
   exit /b 1
 )
 set "AFNI_ROOT_SLASH=%AFNI_ROOT:\=/%"
-set "PATH=%AFNI_ROOT%;%AFNI_ROOT%\scripts;%AFNI_ROOT%\msys\usr\bin;%AFNI_ROOT%\python\bin;%PATH%"
+set "AFNI_PATH=%AFNI_ROOT%;%AFNI_ROOT%\scripts;%AFNI_ROOT%\msys\usr\bin"
+set "PATH=%AFNI_PATH%;%AFNI_ROOT%\python\bin;%AFNI_ROOT%\R\bin;%PATH%"
 if not defined HOME set "HOME=%USERPROFILE%"
 set "AFNI_ALLOW_ARBITRARY_FILENAMES=YES"
 set "LANG=C.UTF-8"
@@ -92,6 +97,8 @@ class ScriptingConfig(BaseModel):
     source_dir: Path
     msys_root: Path
     manifest: Path = DEFAULT_MANIFEST
+    r_home: Path | None = None
+    r_io: Path | None = None
 
 
 class ScriptingResult(BaseModel):
@@ -360,6 +367,10 @@ def assemble(config: ScriptingConfig) -> ScriptingResult:
     _copy_packages(config, result)
     _install_python_extras(config, result)
     _install_scripts(config, result)
+    if config.r_home is not None:
+        shutil.copytree(config.r_home, config.package_dir / "R")
+    if config.r_io is not None:
+        shutil.copy2(config.r_io, config.package_dir / "scripts" / config.r_io.name)
     etc = config.package_dir / "msys" / "etc"
     etc.mkdir(parents=True, exist_ok=True)
     (etc / "fstab").write_text(FSTAB)

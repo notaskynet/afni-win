@@ -279,7 +279,7 @@ def build(config: BuildConfig, build_dir: Path, targets: list[str]) -> tuple[lis
 
     Returns:
         Built and missing target names (programs ``<name>.exe``, libraries
-        ``lib<name>.dll``).
+        ``lib<name>.dll``, ``R_io.so``).
     """
     cmd = [
         "cmake",
@@ -297,7 +297,9 @@ def build(config: BuildConfig, build_dir: Path, targets: list[str]) -> tuple[lis
     _log_failures(result.stdout + result.stderr)
     output = build_dir / "targets_built"
     built = [
-        t for t in targets if (output / f"{t}.exe").exists() or (output / f"lib{t}.dll").exists()
+        t
+        for t in targets
+        if any((output / name).exists() for name in (f"{t}.exe", f"lib{t}.dll", f"{t}.so"))
     ]
     missing = [t for t in targets if t not in built]
     return built, missing

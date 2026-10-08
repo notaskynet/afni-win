@@ -44,6 +44,7 @@ class PackageConfig(BaseModel):
     helpers: list[str] = Field(default_factory=lambda: ["qhull.exe", "cjpeg.exe", "djpeg.exe"])
     objdump: str = "objdump"
     msys_root: Path | None = None
+    r_home: Path | None = None
 
 
 class PackageResult(BaseModel):
@@ -239,6 +240,7 @@ def _parse_args() -> PackageConfig:
     parser.add_argument(
         "--msys-root", type=Path, help="Windows path of MSYS2 /: add the scripting runtime"
     )
+    parser.add_argument("--r-home", type=Path, help="R installed by tools.r_runtime")
     return PackageConfig(**vars(parser.parse_args()))
 
 

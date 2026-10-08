@@ -98,6 +98,10 @@ def test_install_scripts_writes_launchers(tmp_path: Path) -> None:
     python_dir = source / "src" / "python_scripts" / "scripts"
     tcsh_dir.mkdir(parents=True)
     python_dir.mkdir(parents=True)
+    (source / "src" / "scripts_for_r").mkdir()
+    (source / "src" / "R_scripts").mkdir()
+    (source / "src" / "scripts_for_r" / "3dMVM").write_text("#!/bin/tcsh -f\n")
+    (source / "src" / "R_scripts" / "3dMVM.R").write_text("#!/usr/bin/env AFNI_Batch_R\n")
     (tcsh_dir / "@GetAfniView").write_text("#!/usr/bin/env tcsh\necho\n")
     (tcsh_dir / "CMakeLists.txt").write_text("project(x)\n")
     (tcsh_dir / "notes.txt").write_text("plain text\n")
@@ -108,9 +112,16 @@ def test_install_scripts_writes_launchers(tmp_path: Path) -> None:
     result = ScriptingResult()
     _install_scripts(config, result)
     assert sorted(p.name for p in (package / "scripts").iterdir()) == [
+        "3dMVM",
+        "3dMVM.R",
         "@GetAfniView",
         "afni_proc.py",
         "notes.txt",
     ]
-    assert sorted(p.name for p in package.glob("*.cmd")) == ["@GetAfniView.cmd", "afni_proc.py.cmd"]
-    assert (result.scripts, result.launchers) == (3, 2)
+    assert sorted(p.name for p in package.glob("*.cmd")) == [
+        "3dMVM.cmd",
+        "@GetAfniView.cmd",
+        "afni_proc.py.cmd",
+    ]
+    assert (result.scripts, result.launchers) == (5, 3)
+    assert " -f " in (package / "3dMVM.cmd").read_text()
