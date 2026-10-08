@@ -1,8 +1,8 @@
 # Programs that only src/Makefile.INCLUDE builds (upstream CMake has no
 # target for them) but that upstream scripts call, e.g. count_afni in every
 # afni_proc.py script. Each is one source file linked like `count` upstream.
-# Included by afni-win-project.cmake; the Linux reference build uses it alone
-# as CMAKE_PROJECT_AFNI_INCLUDE.
+# Included by afni-win-project.cmake and, for the Linux reference build, by
+# afni-linux-reference.cmake.
 set(AFNI_WIN_EXTRA_PROGRAMS "" CACHE STRING "Single-file upstream programs to add as targets")
 
 function(_afni_win_add_extra_programs)
