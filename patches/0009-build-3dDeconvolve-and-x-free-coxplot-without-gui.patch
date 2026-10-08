@@ -10,7 +10,8 @@ mri_coxplot.c (-xjpeg). Build files and a header that names X11 types are
 outside the reach of a replacement header or library. With COMP_GUI off the
 patch builds coxplot without Motif, defines COXPLOT_WITHOUT_X11 for its
 users (coxplot.h then leaves out the declarations that need X11 types), and
-defines 3dDeconvolve with mri_coxplot.c. With COMP_GUI on nothing changes.
+defines 3dDeconvolve and 3dDeconvolve_f with mri_coxplot.c. With COMP_GUI on
+nothing changes.
 
 diff --git a/src/CMakeLists.txt b/src/CMakeLists.txt
 index 5ab7e63..cd18419 100644
@@ -27,10 +28,10 @@ index 5ab7e63..cd18419 100644
  
  # Add suma
 diff --git a/src/CMakeLists_binaries.txt b/src/CMakeLists_binaries.txt
-index 81d394a..9545fc0 100644
+index 81d394a..c321db2 100644
 --- a/src/CMakeLists_binaries.txt
 +++ b/src/CMakeLists_binaries.txt
-@@ -543,4 +543,9 @@ if(COMP_GUI)
+@@ -543,4 +543,13 @@ if(COMP_GUI)
    )
  
  
@@ -39,6 +40,10 @@ index 81d394a..9545fc0 100644
 +  # memplot_to_RGB_sef() from mri_coxplot.c, so it builds without X11.
 +  add_afni_executable(3dDeconvolve $<TARGET_OBJECTS:parser> 3dDeconvolve.c mri_coxplot.c)
 +  target_link_libraries(3dDeconvolve PRIVATE AFNI::coxplot AFNI::mri f2c NIFTI::nifticdf m)
++
++  add_afni_executable(3dDeconvolve_f $<TARGET_OBJECTS:parser> 3dDeconvolve.c mri_coxplot.c)
++  target_compile_definitions(3dDeconvolve_f PRIVATE "FLOATIZE")
++  target_link_libraries(3dDeconvolve_f PRIVATE AFNI::coxplot AFNI::mri f2c NIFTI::nifticdf m)
  endif()
 diff --git a/src/coxplot/CMakeLists.txt b/src/coxplot/CMakeLists.txt
 index 0026271..40b3ddd 100644
