@@ -1,0 +1,34 @@
+{
+  "default": {
+    "rtol": 0.01,
+    "atol_scale": 0.01,
+    "max_fraction_beyond": 0.001
+  },
+  "text": {
+    "rtol": 0.01
+  },
+  "overrides": [
+    {
+      "pattern": "blur_est.*.1D",
+      "reason": "ACF model fit of 3dFWHMx, not reproducible upstream (D29: powell_int.c reseeds from time()+getpid())",
+      "tolerance": {
+        "rtol": 0.01,
+        "atol_scale": 0.01,
+        "max_fraction_beyond": 0.001
+      },
+      "text_rtol": 0.01,
+      "informational": true
+    },
+    {
+      "pattern": "stats.*+tlrc.HEAD",
+      "reason": "3dClustSim tables (AFNI_CLUSTSIM_* attributes) come from random simulations driven by the ACF estimate (D34)",
+      "tolerance": {
+        "rtol": 0.01,
+        "atol_scale": 0.01,
+        "max_fraction_beyond": 0.001
+      },
+      "text_rtol": 0.01,
+      "informational_attributes": ["AFNI_CLUSTSIM_.*"]
+    }
+  ]
+}

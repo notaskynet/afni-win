@@ -700,7 +700,8 @@ def compare(config: CompareConfig) -> list[Comparison]:
     names = sorted(
         p.name for p in ref_dir.iterdir() if p.is_file() and p.name not in inputs | {INPUTS_LIST}
     )
-    names += sorted(f"logs/{p.name}" for p in (ref_dir / "logs").iterdir() if p.is_file())
+    if (ref_dir / "logs").is_dir():
+        names += sorted(f"logs/{p.name}" for p in (ref_dir / "logs").iterdir() if p.is_file())
     results = [_compare_file(name, ref_dir, cand_dir, tolerances) for name in names]
     return [r for r in results if r is not None]
 
