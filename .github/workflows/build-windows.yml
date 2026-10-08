@@ -214,6 +214,7 @@ jobs:
           args=(--platform linux --afni-dir "$PWD/afni-bin" --data-dir pipeline/data
             --work-dir pipeline/work --results-dir results)
           uv run --frozen python -m tests.pipeline.run prepare "${args[@]}"
+          uv run --frozen python -m tests.pipeline.run check "${args[@]}"
           uv run --frozen python -m tests.pipeline.run subjects "${args[@]}"
           uv run --frozen python -m tests.pipeline.run group "${args[@]}"
 
@@ -422,7 +423,7 @@ jobs:
         run: |
           $common = @('--platform', 'windows', '--afni-dir', $env:AFNI_DIR, '--data-dir', "$env:PIPELINE_DIR\data",
             '--work-dir', "$env:PIPELINE_DIR\work", '--results-dir', 'results')
-          foreach ($action in 'prepare', 'subjects', 'group') {
+          foreach ($action in 'prepare', 'check', 'subjects', 'group') {
             uv run --frozen python -m tests.pipeline.run $action @common
             if ($LASTEXITCODE -ne 0) { throw "$action failed" }
           }
