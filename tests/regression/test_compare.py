@@ -1,11 +1,14 @@
 """Tests for tests.regression.compare."""
 
+from pathlib import Path
+
 import numpy as np
 
 from tests.regression.compare import (
     DEFAULT_TOLERANCE_FILE,
     Tolerance,
     ToleranceConfig,
+    _compare_afni,
     _compare_text,
     _values,
 )
@@ -59,3 +62,56 @@ def test_absolute_tolerance_for_near_zero_numbers() -> None:
     cand = b"1.000000 -0.000003 15.5\n"
     assert _compare_text("m.1D", "text", ref, cand, 1e-2, 0.0).status == "different"
     assert _compare_text("m.1D", "text", ref, cand, 1e-2, 1e-2).status == "within"
+
+
+def test_fraction_of_values_beyond_tolerance() -> None:
+    """With max_fraction_beyond, a few edge values beyond tolerance are accepted."""
+    ref = np.ones(1000)
+    cand = ref.copy()
+    cand[:3] = 2.0
+    strict = Tolerance(rtol=1e-2, atol_scale=0.0)
+    loose = Tolerance(rtol=1e-2, atol_scale=0.0, max_fraction_beyond=0.005)
+    assert _values("d", "AFNI", ref, cand, strict).status == "different"
+    result = _values("d", "AFNI", ref, cand, loose)
+    assert (result.status, result.beyond) == ("within", 3)
+    cand[:10] = 2.0
+    assert _values("d", "AFNI", ref, cand, loose).status == "different"
+
+
+def _write_dataset(directory: Path, clustsim: str) -> None:
+    """Write a one-value float AFNI dataset with a 3dClustSim attribute.
+
+    Args:
+        directory: Output directory.
+        clustsim: Value of the AFNI_CLUSTSIM_NN1_1sided attribute.
+    """
+    directory.mkdir()
+    head = (
+        "type = integer-attribute\nname = DATASET_RANK\ncount = 8\n 3 1 0 0 0 0 0 0\n\n"
+        "type = integer-attribute\nname = DATASET_DIMENSIONS\ncount = 5\n 1 1 1 0 0\n\n"
+        "type = integer-attribute\nname = BRICK_TYPES\ncount = 1\n 3\n\n"
+        "type = string-attribute\nname = BYTEORDER_STRING\ncount = 10\n'LSB_FIRST~\n\n"
+        f"type = string-attribute\nname = AFNI_CLUSTSIM_NN1_1sided\ncount = {len(clustsim) + 1}\n"
+        f"'{clustsim}~\n"
+    )
+    (directory / "s+tlrc.HEAD").write_text(head)
+    (directory / "s+tlrc.BRIK").write_bytes(np.array([1.0], dtype="<f4").tobytes())
+
+
+def test_informational_attributes_are_only_noted(tmp_path: Path) -> None:
+    """Attributes such as the 3dClustSim tables are reported, not failed."""
+    _write_dataset(tmp_path / "ref", "<table a>")
+    _write_dataset(tmp_path / "cand", "<table b>")
+    tolerance = Tolerance(rtol=1e-5, atol_scale=0.0)
+    args = ("s+tlrc.HEAD", tmp_path / "ref", tmp_path / "cand", tolerance)
+    assert _compare_afni(*args).status == "different"
+    result = _compare_afni(*args, ["AFNI_CLUSTSIM_.*"])
+    assert result.status == "identical"
+    assert "AFNI_CLUSTSIM_NN1_1sided" in result.notes[-1]
+
+
+def test_package_name_is_normalized() -> None:
+    """The platform name of the AFNI package is not a difference."""
+    ref = b"AFNI package              : Linux_cmake\n"
+    cand = b"AFNI package              : Windows_cmake\n"
+    assert _compare_text("out.txt", "text", ref, cand, 1e-4).status == "identical"

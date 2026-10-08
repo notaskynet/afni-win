@@ -10,3 +10,8 @@ function(_afni_win_place_compat)
   endif()
 endfunction()
 cmake_language(DEFER DIRECTORY "${CMAKE_SOURCE_DIR}" CALL _afni_win_place_compat)
+
+
+include("${_afni_win_root}/cmake/afni-extra-programs.cmake")
+include("${_afni_win_root}/cmake/afni-nox.cmake")
+include("${_afni_win_root}/cmake/afni-rio.cmake")

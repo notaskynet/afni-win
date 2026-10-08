@@ -67,6 +67,25 @@ target_compile_options(afni_compat PRIVATE "SHELL:-include \"${AFNI_COMPAT_HEADE
 target_link_libraries(afni_compat PRIVATE advapi32)
 target_link_options(afni_compat INTERFACE "LINKER:--require-defined=afni_compat_runtime")
 
+# Every executable linked with the layer gets a manifest with the UTF-8 ANSI
+# code page and long-path awareness (docs/DECISIONS.md D37). GCC links
+# default-manifest.o from its startfile directories into every executable;
+# -B puts this directory first, so our object replaces MinGW's (a second
+# RT_MANIFEST resource would collide with it). DLLs are not affected.
+set(AFNI_COMPAT_MANIFEST_DIR "${CMAKE_CURRENT_BINARY_DIR}/manifest")
+add_custom_command(
+  OUTPUT "${AFNI_COMPAT_MANIFEST_DIR}/default-manifest.o"
+  COMMAND "${CMAKE_COMMAND}" -E make_directory "${AFNI_COMPAT_MANIFEST_DIR}"
+  COMMAND "${CMAKE_RC_COMPILER}" -O coff --include-dir "${CMAKE_CURRENT_SOURCE_DIR}/src"
+          -i "${CMAKE_CURRENT_SOURCE_DIR}/src/default-manifest.rc"
+          -o "${AFNI_COMPAT_MANIFEST_DIR}/default-manifest.o"
+  DEPENDS src/default-manifest.rc src/afni.manifest
+  VERBATIM
+)
+add_custom_target(afni_compat_manifest DEPENDS "${AFNI_COMPAT_MANIFEST_DIR}/default-manifest.o")
+add_dependencies(afni_compat afni_compat_manifest)
+target_link_options(afni_compat INTERFACE "$<$<STREQUAL:$<TARGET_PROPERTY:TYPE>,EXECUTABLE>:-B${AFNI_COMPAT_MANIFEST_DIR}/>")
+
 add_library(afni_compat_binmode STATIC src/binmode.c)
 set_target_properties(afni_compat_binmode PROPERTIES C_STANDARD 11 C_EXTENSIONS OFF)
 target_link_libraries(afni_compat INTERFACE "$<LINK_ONLY:afni_compat_binmode>")
@@ -80,7 +99,7 @@ if(AFNI_COMPAT_TESTS)
   target_compile_options(compat_test_child PRIVATE "SHELL:-include \"${AFNI_COMPAT_HEADER}\"" ${AFNI_COMPAT_WARNINGS})
   target_link_libraries(compat_test_child PRIVATE afni_compat)
 
-  foreach(name dl env fs init mman net process rand48 shell signal string sysinfo time users)
+  foreach(name codepage dl env fs init mman net process rand48 shell signal string sysinfo time users)
     add_executable(test_${name} tests/test_${name}.c)
     set_target_properties(test_${name} PROPERTIES C_STANDARD 11 C_STANDARD_REQUIRED ON C_EXTENSIONS OFF)
     target_compile_options(test_${name} PRIVATE "SHELL:-include \"${AFNI_COMPAT_HEADER}\"" ${AFNI_COMPAT_WARNINGS})

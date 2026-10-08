@@ -14,3 +14,5 @@ qhull.exe | MSYS2 mingw-w64-ucrt-x86_64-qhull (not upstream src/qhulldir, which 
 AFNI_atlas_spaces.niml | upstream AFNI tag, src/AFNI_atlas_spaces.niml | upstream tag | AFNI | whereami and atlas functions; atlas datasets themselves are NOT shipped until their licences are checked
 cjpeg.exe, djpeg.exe and their DLLs | MSYS2 mingw-w64-ucrt-x86_64-libjpeg-turbo | version recorded in the release notes | IJG and BSD-3-Clause | 3dDeconvolve -xjpeg and other JPEG output through mri_write.c
 libmodel_*.dll | upstream AFNI tag (src/model_*.c) | upstream tag | AFNI | NLfit models loaded by 3dTSgen and 1dNLfit
+libgsl-28.dll, libgslcblas-0.dll | MSYS2 mingw-w64-ucrt-x86_64-gsl | version recorded in the release notes | GPL-3.0-or-later | src/ptaylor programs (3dClusterize, ...), 3dSkullStrip
+afni_x_absent.dll | afni-win (this repository), generated from manifests/x-absent.txt, plus upstream suma_help.c, coxplot/plot_ts.c, mri_coxplot.c | built per release | GPL-3.0-or-later (generated part), AFNI (upstream sources) | 3dSkullStrip, 1dplot (X11 entry points fail with a message, D35)

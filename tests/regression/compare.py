@@ -69,14 +69,21 @@ LOG_NORMALIZATION: list[tuple[re.Pattern[str], str]] = [
     (re.compile(r"\[[^\]@\s]+@[^\]:\s]+:"), "[<USER>@<HOST>:"),
     (re.compile(r"\{AFNI_[^}]*\}"), "{<VERSION>}"),
     (re.compile(r"\.exe\b"), ""),
+    (re.compile(r"\b(?:Linux|Windows)_cmake\b"), "<PACKAGE>"),
 ]
 
 
 class Tolerance(BaseModel):
-    """Numeric tolerance for dataset values."""
+    """Numeric tolerance for dataset values.
+
+    ``max_fraction_beyond`` lets that fraction of the values of a dataset lie
+    beyond ``rtol``/``atol_scale`` (whole pipelines: voxels at the brain edge
+    move when a registration stops at a slightly different point).
+    """
 
     rtol: float
     atol_scale: float
+    max_fraction_beyond: float = 0.0
 
 
 class TextTolerance(BaseModel):
@@ -93,6 +100,7 @@ class Override(BaseModel):
     tolerance: Tolerance
     text_rtol: float
     informational: bool = False
+    informational_attributes: list[str] = Field(default_factory=list)
 
 
 class ToleranceConfig(BaseModel):
@@ -112,10 +120,36 @@ class ToleranceConfig(BaseModel):
             Dataset tolerance, relative tolerance for text numbers, and whether
             differences are only reported.
         """
+        override = self._override(name)
+        if override is not None:
+            return override.tolerance, override.text_rtol, override.informational
+        return self.default, self.text.rtol, False
+
+    def informational_attributes(self, name: str) -> list[str]:
+        """Dataset attributes of a file whose differences are only reported.
+
+        Args:
+            name: Path relative to the output directory.
+
+        Returns:
+            Regular expressions matched against whole attribute names.
+        """
+        override = self._override(name)
+        return override.informational_attributes if override is not None else []
+
+    def _override(self, name: str) -> Override | None:
+        """Find the first override whose pattern matches a file.
+
+        Args:
+            name: Path relative to the output directory.
+
+        Returns:
+            The override, or None.
+        """
         for override in self.overrides:
             if any(fnmatch.fnmatch(name, p) for p in override.pattern.split("|")):
-                return override.tolerance, override.text_rtol, override.informational
-        return self.default, self.text.rtol, False
+                return override
+        return None
 
 
 class Comparison(BaseModel):
@@ -174,10 +208,14 @@ def _values(
     allowed = atol + tolerance.rtol * scale
     beyond = int(np.count_nonzero(~(diff <= allowed)))
     rel = np.divide(diff, scale, out=np.zeros_like(diff, dtype=np.float64), where=scale > 0)
+    notes = []
+    if 0 < beyond <= tolerance.max_fraction_beyond * ref.size:
+        notes.append(f"{beyond / ref.size:.3%} beyond, allowed {tolerance.max_fraction_beyond:.3%}")
     return Comparison(
         name=name,
         kind=kind,
-        status="within" if beyond == 0 else "different",
+        status="within" if beyond == 0 or notes else "different",
+        notes=notes,
         values=int(ref.size),
         different=int(np.count_nonzero(diff > 0)),
         beyond=beyond,
@@ -283,7 +321,13 @@ def _numbers(text: str) -> np.ndarray:
     return np.array([float(v) for v in text.split()], dtype=np.float64)
 
 
-def _compare_afni(name: str, ref_dir: Path, cand_dir: Path, tolerance: Tolerance) -> Comparison:
+def _compare_afni(
+    name: str,
+    ref_dir: Path,
+    cand_dir: Path,
+    tolerance: Tolerance,
+    informational_attributes: list[str] | None = None,
+) -> Comparison:
     """Compare an AFNI dataset: attributes and values.
 
     Args:
@@ -291,6 +335,8 @@ def _compare_afni(name: str, ref_dir: Path, cand_dir: Path, tolerance: Tolerance
         ref_dir: Reference directory.
         cand_dir: Candidate directory.
         tolerance: Allowed difference.
+        informational_attributes: Attribute name patterns whose differences
+            are only noted.
 
     Returns:
         Comparison result.
@@ -301,8 +347,14 @@ def _compare_afni(name: str, ref_dir: Path, cand_dir: Path, tolerance: Tolerance
     notes: list[str] = []
     float_ref: list[np.ndarray] = []
     float_cand: list[np.ndarray] = []
+    reported = [re.compile(p) for p in informational_attributes or []]
+    informational: list[str] = []
     for key in sorted(set(ref_head) | set(cand_head)):
         if VOLATILE_ATTRIBUTE.match(key):
+            continue
+        if any(p.fullmatch(key) for p in reported):
+            if ref_head.get(key) != cand_head.get(key):
+                informational.append(key)
             continue
         ref_attr = ref_head.get(key)
         cand_attr = cand_head.get(key)
@@ -331,6 +383,9 @@ def _compare_afni(name: str, ref_dir: Path, cand_dir: Path, tolerance: Tolerance
         if attributes.status == "different":
             attributes.notes.append("float attributes beyond tolerance")
         data = _merge(data, attributes.model_copy(update={"values": 0}))
+    if informational:
+        notes_text = f"attributes differ (reported only): {' '.join(informational)}"
+        data = data.model_copy(update={"notes": [*data.notes, notes_text]})
     if notes:
         data = data.model_copy(update={"status": "different", "notes": data.notes + notes})
     return data
@@ -581,14 +636,21 @@ def _compare_file(
     if not (cand_dir / name).exists():
         return Comparison(name=name, kind="missing", status="missing")
     tolerance, text_rtol, informational = tolerances.for_file(name)
-    result = _compare_present(name, ref_dir, cand_dir, tolerance, text_rtol)
+    result = _compare_present(
+        name, ref_dir, cand_dir, tolerance, text_rtol, tolerances.informational_attributes(name)
+    )
     if informational and result.status == "different" and not name.endswith(".rc"):
         result.status = "informational"
     return result
 
 
 def _compare_present(
-    name: str, ref_dir: Path, cand_dir: Path, tolerance: Tolerance, text_rtol: float
+    name: str,
+    ref_dir: Path,
+    cand_dir: Path,
+    tolerance: Tolerance,
+    text_rtol: float,
+    informational_attributes: list[str] | None = None,
 ) -> Comparison:
     """Compare a file that exists on both sides.
 
@@ -598,12 +660,13 @@ def _compare_present(
         cand_dir: Candidate directory.
         tolerance: Dataset tolerance.
         text_rtol: Relative tolerance for numbers in text.
+        informational_attributes: AFNI attribute name patterns that are only reported.
 
     Returns:
         Comparison result.
     """
     if name.endswith(".HEAD"):
-        return _compare_afni(name, ref_dir, cand_dir, tolerance)
+        return _compare_afni(name, ref_dir, cand_dir, tolerance, informational_attributes)
     if name.endswith((".nii", ".nii.gz")):
         return _compare_nifti(name, ref_dir, cand_dir, tolerance)
     if name.endswith(".rc"):

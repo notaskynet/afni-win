@@ -1,0 +1,350 @@
+From: afni-win
+Subject: [PATCH] split PATH at the platform separator in the R programs
+
+Why the compat layer cannot handle this: every AFNI R program (and
+AFNIio.R) finds its companion files, e.g. AFNIio.R, with a first.in.path()
+that splits the PATH environment variable at ':' in R code. On Windows R
+the separator is ';' and every entry starts with a drive letter "C:", so
+the split yields no valid directory and the program stops before reading
+any data. The R code runs in the R interpreter, outside the C compat layer,
+and PATH must stay a valid Windows PATH for R itself. The patch uses
+.Platform$path.sep, which is ':' on Linux and macOS, so nothing changes
+there. (docs/DECISIONS.md D39)
+diff --git a/src/R_scripts/1dGC.R b/src/R_scripts/1dGC.R
+index 903443b..0c9e3f8 100644
+--- a/src/R_scripts/1dGC.R
++++ b/src/R_scripts/1dGC.R
+@@ -10,7 +10,7 @@ print("        SSCC/NIMH, National Institutes of Health, Bethesda MD 20892")
+ print("#+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++")
+ 
+ first.in.path <- function(file) {
+-   ff <- paste(strsplit(Sys.getenv('PATH'),':')[[1]],'/', file, sep='')
++   ff <- paste(strsplit(Sys.getenv('PATH'), .Platform$path.sep)[[1]],'/', file, sep='')
+    ff<-ff[lapply(ff,file.exists)==TRUE];
+    #cat('Using ', ff[1],'\n');
+    return(gsub('//','/',ff[1], fixed=TRUE))
+diff --git a/src/R_scripts/1dRplot.R b/src/R_scripts/1dRplot.R
+index d2d1844..5afb8d5 100755
+--- a/src/R_scripts/1dRplot.R
++++ b/src/R_scripts/1dRplot.R
+@@ -5,7 +5,7 @@
+ rm(list = ls())
+ 
+ first.in.path <- function(file) {
+-   ff <- paste(strsplit(Sys.getenv('PATH'),':')[[1]],'/', file, sep='')
++   ff <- paste(strsplit(Sys.getenv('PATH'), .Platform$path.sep)[[1]],'/', file, sep='')
+    ff<-ff[lapply(ff,file.exists)==TRUE];
+    #cat('Using ', ff[1],'\n');
+    return(gsub('//','/',ff[1], fixed=TRUE)) 
+diff --git a/src/R_scripts/1dSEMr.R b/src/R_scripts/1dSEMr.R
+index b9ffa6a..417de37 100644
+--- a/src/R_scripts/1dSEMr.R
++++ b/src/R_scripts/1dSEMr.R
+@@ -9,7 +9,7 @@ print("SSCC/NIMH, National Institutes of Health, Bethesda MD 20892")
+ print("#+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++")
+ 
+ first.in.path <- function(file) {
+-   ff <- paste(strsplit(Sys.getenv('PATH'),':')[[1]],'/', file, sep='')
++   ff <- paste(strsplit(Sys.getenv('PATH'), .Platform$path.sep)[[1]],'/', file, sep='')
+    ff<-ff[lapply(ff,file.exists)==TRUE];
+    #cat('Using ', ff[1],'\n');
+    return(gsub('//','/',ff[1], fixed=TRUE))
+diff --git a/src/R_scripts/1dSVAR.R b/src/R_scripts/1dSVAR.R
+index 8f68ff0..c68a97d 100644
+--- a/src/R_scripts/1dSVAR.R
++++ b/src/R_scripts/1dSVAR.R
+@@ -9,7 +9,7 @@ print("SSCC/NIMH, National Institutes of Health, Bethesda MD 20892")
+ print("#+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++")
+ 
+ first.in.path <- function(file) {
+-   ff <- paste(strsplit(Sys.getenv('PATH'),':')[[1]],'/', file, sep='')
++   ff <- paste(strsplit(Sys.getenv('PATH'), .Platform$path.sep)[[1]],'/', file, sep='')
+    ff<-ff[lapply(ff,file.exists)==TRUE];
+    #cat('Using ', ff[1],'\n');
+    return(gsub('//','/',ff[1], fixed=TRUE))
+diff --git a/src/R_scripts/3dGC.R b/src/R_scripts/3dGC.R
+index 2515b4a..e55ed0f 100755
+--- a/src/R_scripts/3dGC.R
++++ b/src/R_scripts/3dGC.R
+@@ -11,7 +11,7 @@ print("SSCC/NIMH, National Institutes of Health, Bethesda MD 20892")
+ print("#+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++")
+ 
+ first.in.path <- function(file) {
+-   ff <- paste(strsplit(Sys.getenv('PATH'),':')[[1]],'/', file, sep='')
++   ff <- paste(strsplit(Sys.getenv('PATH'), .Platform$path.sep)[[1]],'/', file, sep='')
+    ff<-ff[lapply(ff,file.exists)==TRUE];
+    #cat('Using ', ff[1],'\n');
+    return(gsub('//','/',ff[1], fixed=TRUE)) 
+diff --git a/src/R_scripts/3dGLMM.R b/src/R_scripts/3dGLMM.R
+index 14ce136..0d91360 100755
+--- a/src/R_scripts/3dGLMM.R
++++ b/src/R_scripts/3dGLMM.R
+@@ -1,7 +1,7 @@
+ ##!/usr/bin/env AFNI_Batch_R
+ 
+ first.in.path <- function(file) {
+-   ff <- paste(strsplit(Sys.getenv('PATH'),':')[[1]],'/', file, sep='')
++   ff <- paste(strsplit(Sys.getenv('PATH'), .Platform$path.sep)[[1]],'/', file, sep='')
+    ff<-ff[lapply(ff,file.exists)==TRUE];
+   #cat('Using ', ff[1],'\n');
+    return(gsub('//','/',ff[1], fixed=TRUE))
+diff --git a/src/R_scripts/3dICA.R b/src/R_scripts/3dICA.R
+index b50524b..031657b 100755
+--- a/src/R_scripts/3dICA.R
++++ b/src/R_scripts/3dICA.R
+@@ -14,7 +14,7 @@
+ rm(list = ls())
+ 
+ first.in.path <- function(file) {
+-   ff <- paste(strsplit(Sys.getenv('PATH'),':')[[1]],'/', file, sep='')
++   ff <- paste(strsplit(Sys.getenv('PATH'), .Platform$path.sep)[[1]],'/', file, sep='')
+    ff<-ff[lapply(ff,file.exists)==TRUE];
+    #cat('Using ', ff[1],'\n');
+    return(gsub('//','/',ff[1], fixed=TRUE)) 
+diff --git a/src/R_scripts/3dICC.R b/src/R_scripts/3dICC.R
+index 1e36626..92592c8 100755
+--- a/src/R_scripts/3dICC.R
++++ b/src/R_scripts/3dICC.R
+@@ -1,7 +1,7 @@
+ #!/usr/bin/env AFNI_Batch_R
+ 
+ first.in.path <- function(file) {
+-   ff <- paste(strsplit(Sys.getenv('PATH'),':')[[1]],'/', file, sep='')
++   ff <- paste(strsplit(Sys.getenv('PATH'), .Platform$path.sep)[[1]],'/', file, sep='')
+    ff<-ff[lapply(ff,file.exists)==TRUE];
+    #cat('Using ', ff[1],'\n');
+    return(gsub('//','/',ff[1], fixed=TRUE)) 
+diff --git a/src/R_scripts/3dISC.R b/src/R_scripts/3dISC.R
+index 9e213fb..ae67119 100755
+--- a/src/R_scripts/3dISC.R
++++ b/src/R_scripts/3dISC.R
+@@ -1,7 +1,7 @@
+ #!/usr/bin/env AFNI_Batch_R
+ 
+ first.in.path <- function(file) {
+-   ff <- paste(strsplit(Sys.getenv('PATH'),':')[[1]],'/', file, sep='')
++   ff <- paste(strsplit(Sys.getenv('PATH'), .Platform$path.sep)[[1]],'/', file, sep='')
+    ff<-ff[lapply(ff,file.exists)==TRUE];
+    #cat('Using ', ff[1],'\n');
+    return(gsub('//','/',ff[1], fixed=TRUE)) 
+diff --git a/src/R_scripts/3dLME.R b/src/R_scripts/3dLME.R
+index f279b00..3dd264f 100755
+--- a/src/R_scripts/3dLME.R
++++ b/src/R_scripts/3dLME.R
+@@ -2,7 +2,7 @@
+ 
+ 
+ first.in.path <- function(file) {
+-   ff <- paste(strsplit(Sys.getenv('PATH'),':')[[1]],'/', file, sep='')
++   ff <- paste(strsplit(Sys.getenv('PATH'), .Platform$path.sep)[[1]],'/', file, sep='')
+    ff<-ff[lapply(ff,file.exists)==TRUE];
+    #cat('Using ', ff[1],'\n');
+    return(gsub('//','/',ff[1], fixed=TRUE)) 
+diff --git a/src/R_scripts/3dLME2.R b/src/R_scripts/3dLME2.R
+index 2936f78..d7c12c3 100755
+--- a/src/R_scripts/3dLME2.R
++++ b/src/R_scripts/3dLME2.R
+@@ -1,7 +1,7 @@
+ #!/usr/bin/env AFNI_Batch_R
+ 
+ first.in.path <- function(file) {
+-   ff <- paste(strsplit(Sys.getenv('PATH'),':')[[1]],'/', file, sep='')
++   ff <- paste(strsplit(Sys.getenv('PATH'), .Platform$path.sep)[[1]],'/', file, sep='')
+    ff<-ff[lapply(ff,file.exists)==TRUE];
+   #cat('Using ', ff[1],'\n');
+    return(gsub('//','/',ff[1], fixed=TRUE))
+diff --git a/src/R_scripts/3dLMEr.R b/src/R_scripts/3dLMEr.R
+index f6fe703..2074863 100755
+--- a/src/R_scripts/3dLMEr.R
++++ b/src/R_scripts/3dLMEr.R
+@@ -1,7 +1,7 @@
+ #!/usr/bin/env AFNI_Batch_R
+ 
+ first.in.path <- function(file) {
+-   ff <- paste(strsplit(Sys.getenv('PATH'),':')[[1]],'/', file, sep='')
++   ff <- paste(strsplit(Sys.getenv('PATH'), .Platform$path.sep)[[1]],'/', file, sep='')
+    ff<-ff[lapply(ff,file.exists)==TRUE];
+   #cat('Using ', ff[1],'\n');
+    return(gsub('//','/',ff[1], fixed=TRUE))
+diff --git a/src/R_scripts/3dMEMA.R b/src/R_scripts/3dMEMA.R
+index 0d82f2a..d6eb7ff 100755
+--- a/src/R_scripts/3dMEMA.R
++++ b/src/R_scripts/3dMEMA.R
+@@ -7,7 +7,7 @@
+ rm(list = ls())
+ 
+ first.in.path <- function(file) {
+-   ff <- paste(strsplit(Sys.getenv('PATH'),':')[[1]],'/', file, sep='')
++   ff <- paste(strsplit(Sys.getenv('PATH'), .Platform$path.sep)[[1]],'/', file, sep='')
+    ff<-ff[lapply(ff,file.exists)==TRUE];
+    #cat('Using ', ff[1],'\n');
+    return(gsub('//','/',ff[1], fixed=TRUE)) 
+diff --git a/src/R_scripts/3dMEPFM.R b/src/R_scripts/3dMEPFM.R
+index a83bb24..921b6cf 100644
+--- a/src/R_scripts/3dMEPFM.R
++++ b/src/R_scripts/3dMEPFM.R
+@@ -4,7 +4,7 @@
+ rm(list = ls())
+ 
+ first.in.path <- function(file) {
+-  ff <- paste(strsplit(Sys.getenv('PATH'),':')[[1]],'/', file, sep='')
++  ff <- paste(strsplit(Sys.getenv('PATH'), .Platform$path.sep)[[1]],'/', file, sep='')
+   ff<-ff[lapply(ff,file.exists)==TRUE];
+   #cat('Using ', ff[1],'\n');
+   return(gsub('//','/',ff[1], fixed=TRUE))
+diff --git a/src/R_scripts/3dMSS.R b/src/R_scripts/3dMSS.R
+index 3ff161b..f14c95e 100644
+--- a/src/R_scripts/3dMSS.R
++++ b/src/R_scripts/3dMSS.R
+@@ -1,7 +1,7 @@
+ #!/usr/bin/env AFNI_Batch_R
+ 
+ first.in.path <- function(file) {
+-   ff <- paste(strsplit(Sys.getenv('PATH'),':')[[1]],'/', file, sep='')
++   ff <- paste(strsplit(Sys.getenv('PATH'), .Platform$path.sep)[[1]],'/', file, sep='')
+    ff<-ff[lapply(ff,file.exists)==TRUE];
+   #cat('Using ', ff[1],'\n');
+    return(gsub('//','/',ff[1], fixed=TRUE))
+diff --git a/src/R_scripts/3dMVM.R b/src/R_scripts/3dMVM.R
+index c79141c..11197c3 100755
+--- a/src/R_scripts/3dMVM.R
++++ b/src/R_scripts/3dMVM.R
+@@ -7,7 +7,7 @@
+ # error messages will be stored)
+ 
+ first.in.path <- function(file) {
+-   ff <- paste(strsplit(Sys.getenv('PATH'),':')[[1]],'/', file, sep='')
++   ff <- paste(strsplit(Sys.getenv('PATH'), .Platform$path.sep)[[1]],'/', file, sep='')
+    ff<-ff[lapply(ff,file.exists)==TRUE];
+    #cat('Using ', ff[1],'\n');
+    return(gsub('//','/',ff[1], fixed=TRUE))
+diff --git a/src/R_scripts/3dPFM.R b/src/R_scripts/3dPFM.R
+index a2d0234..a0eb86b 100644
+--- a/src/R_scripts/3dPFM.R
++++ b/src/R_scripts/3dPFM.R
+@@ -40,7 +40,7 @@
+ rm(list = ls())
+ 
+ first.in.path <- function(file) {
+-   ff <- paste(strsplit(Sys.getenv('PATH'),':')[[1]],'/', file, sep='')
++   ff <- paste(strsplit(Sys.getenv('PATH'), .Platform$path.sep)[[1]],'/', file, sep='')
+    ff<-ff[lapply(ff,file.exists)==TRUE];
+    #cat('Using ', ff[1],'\n');
+    return(gsub('//','/',ff[1], fixed=TRUE)) 
+diff --git a/src/R_scripts/3dRprogDemo.R b/src/R_scripts/3dRprogDemo.R
+index 38feeaf..0671563 100755
+--- a/src/R_scripts/3dRprogDemo.R
++++ b/src/R_scripts/3dRprogDemo.R
+@@ -9,7 +9,7 @@
+ rm(list = ls())
+ 
+ first.in.path <- function(file) {
+-   ff <- paste(strsplit(Sys.getenv('PATH'),':')[[1]],'/', file, sep='')
++   ff <- paste(strsplit(Sys.getenv('PATH'), .Platform$path.sep)[[1]],'/', file, sep='')
+    ff<-ff[lapply(ff,file.exists)==TRUE];
+    #cat('Using ', ff[1],'\n');
+    return(gsub('//','/',ff[1], fixed=TRUE)) 
+diff --git a/src/R_scripts/3dSignatures.R b/src/R_scripts/3dSignatures.R
+index a28a4f2..ec4e155 100755
+--- a/src/R_scripts/3dSignatures.R
++++ b/src/R_scripts/3dSignatures.R
+@@ -14,7 +14,7 @@ if (1) {
+ }
+ 
+ first.in.path <- function(file) {
+-   ff <- paste(strsplit(Sys.getenv('PATH'),':')[[1]],'/', file, sep='')
++   ff <- paste(strsplit(Sys.getenv('PATH'), .Platform$path.sep)[[1]],'/', file, sep='')
+    ff<-ff[lapply(ff,file.exists)==TRUE];
+    #cat('Using ', ff[1],'\n');
+    return(gsub('//','/',ff[1], fixed=TRUE)) 
+diff --git a/src/R_scripts/AFNIio.R b/src/R_scripts/AFNIio.R
+index 54b41d6..76f41ae 100644
+--- a/src/R_scripts/AFNIio.R
++++ b/src/R_scripts/AFNIio.R
+@@ -9,7 +9,7 @@ SHOW_TRC <<- FALSE
+ # Functions for library loading
+ #------------------------------------------------------------------
+ find.in.path <- function(file) { #Pretty much same as first.in.path
+-    ff <- paste(strsplit(Sys.getenv('PATH'),':')[[1]],'/', file, sep='')
++    ff <- paste(strsplit(Sys.getenv('PATH'), .Platform$path.sep)[[1]],'/', file, sep='')
+     ff <- ff[lapply(ff,file.exists)==TRUE];
+     aa <- gsub('//','/',ff[1], fixed=TRUE)
+     if (is.na(aa)) aa <- NULL
+diff --git a/src/R_scripts/ExamineXmat.R b/src/R_scripts/ExamineXmat.R
+index c4ee99a..32bb870 100755
+--- a/src/R_scripts/ExamineXmat.R
++++ b/src/R_scripts/ExamineXmat.R
+@@ -9,7 +9,7 @@
+ rm(list = ls())
+ 
+ first.in.path <- function(file) {
+-   ff <- paste(strsplit(Sys.getenv('PATH'),':')[[1]],'/', file, sep='')
++   ff <- paste(strsplit(Sys.getenv('PATH'), .Platform$path.sep)[[1]],'/', file, sep='')
+    ff<-ff[lapply(ff,file.exists)==TRUE];
+    #cat('Using ', ff[1],'\n');
+    return(gsub('//','/',ff[1], fixed=TRUE)) 
+diff --git a/src/R_scripts/MBA.R b/src/R_scripts/MBA.R
+index 4494bf5..a28d4fc 100755
+--- a/src/R_scripts/MBA.R
++++ b/src/R_scripts/MBA.R
+@@ -7,7 +7,7 @@
+ # error messages will be stored)
+ 
+ first.in.path <- function(file) {
+-   ff <- paste(strsplit(Sys.getenv('PATH'),':')[[1]],'/', file, sep='')
++   ff <- paste(strsplit(Sys.getenv('PATH'), .Platform$path.sep)[[1]],'/', file, sep='')
+    ff<-ff[lapply(ff,file.exists)==TRUE];
+    #cat('Using ', ff[1],'\n');
+    return(gsub('//','/',ff[1], fixed=TRUE)) 
+diff --git a/src/R_scripts/PTA.R b/src/R_scripts/PTA.R
+index c91d024..83712ac 100755
+--- a/src/R_scripts/PTA.R
++++ b/src/R_scripts/PTA.R
+@@ -9,7 +9,7 @@
+ rm(list = ls())
+ 
+ first.in.path <- function(file) {
+-   ff <- paste(strsplit(Sys.getenv('PATH'),':')[[1]],'/', file, sep='')
++   ff <- paste(strsplit(Sys.getenv('PATH'), .Platform$path.sep)[[1]],'/', file, sep='')
+    ff<-ff[lapply(ff,file.exists)==TRUE];
+    #cat('Using ', ff[1],'\n');
+    return(gsub('//','/',ff[1], fixed=TRUE)) 
+diff --git a/src/R_scripts/RBA.R b/src/R_scripts/RBA.R
+index 4f1972c..8e48816 100755
+--- a/src/R_scripts/RBA.R
++++ b/src/R_scripts/RBA.R
+@@ -7,7 +7,7 @@
+ # error messages will be stored)
+ 
+ first.in.path <- function(file) {
+-ff <- paste(strsplit(Sys.getenv('PATH'),':')[[1]],'/', file, sep='')
++ff <- paste(strsplit(Sys.getenv('PATH'), .Platform$path.sep)[[1]],'/', file, sep='')
+ ff<-ff[lapply(ff,file.exists)==TRUE];
+ #cat('Using ', ff[1],'\n');
+ return(gsub('//','/',ff[1], fixed=TRUE)) 
+diff --git a/src/R_scripts/TRR.R b/src/R_scripts/TRR.R
+index 160dfab..877ed7c 100755
+--- a/src/R_scripts/TRR.R
++++ b/src/R_scripts/TRR.R
+@@ -6,7 +6,7 @@
+ # error messages will be stored)
+ 
+ first.in.path <- function(file) {
+-   ff <- paste(strsplit(Sys.getenv('PATH'),':')[[1]],'/', file, sep='')
++   ff <- paste(strsplit(Sys.getenv('PATH'), .Platform$path.sep)[[1]],'/', file, sep='')
+    ff<-ff[lapply(ff,file.exists)==TRUE];
+    #cat('Using ', ff[1],'\n');
+    return(gsub('//','/',ff[1], fixed=TRUE)) 
+diff --git a/src/R_scripts/rPkgsInstall.R b/src/R_scripts/rPkgsInstall.R
+index 851b5dd..cf92165 100644
+--- a/src/R_scripts/rPkgsInstall.R
++++ b/src/R_scripts/rPkgsInstall.R
+@@ -4,7 +4,7 @@
+ rm(list = ls())
+ 
+ first.in.path <- function(file) {
+-   ff <- paste(strsplit(Sys.getenv('PATH'),':')[[1]],'/', file, sep='')
++   ff <- paste(strsplit(Sys.getenv('PATH'), .Platform$path.sep)[[1]],'/', file, sep='')
+    ff<-ff[lapply(ff,file.exists)==TRUE];
+    #cat('Using ', ff[1],'\n');
+    return(gsub('//','/',ff[1], fixed=TRUE)) 

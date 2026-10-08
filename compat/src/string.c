@@ -15,3 +15,5 @@ char *strcasestr(const char *haystack, const char *needle) {
   }
   return NULL;
 }
+
+char *index(const char *s, int c) { return strchr(s, c); }

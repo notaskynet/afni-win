@@ -1,0 +1,357 @@
+# X11, Xt, Motif, OpenGL and AFNI X-library (mrix) entry points referenced
+# by console programs that upstream links with X but that use no display:
+# 3dSkullStrip (through libSUMA) and 1dplot with -jpg/-png/-ps
+# (cmake/afni-nox.cmake). The Windows build has no X, so afni_x_absent.dll
+# implements each function as: print its name to stderr, exit with status 1.
+# Data symbols are zero-filled objects of the given size (bytes).
+# Generated from the unresolved symbols of Linux links of these programs
+# without X/GL libraries (AFNI_26.2.09); the same programs linked on Linux
+# against the same generated library give bit-identical results and never
+# reach these functions (3dSkullStrip with and without -orig_vol, 1dplot -jpg).
+#
+# <name> function
+# <name> data <size>
+INIT_def_colovr data 320
+INIT_def_labovr data 320
+INIT_ncolovr data 8
+INIT_ovin_pos data 1764
+INIT_ovin_sgn data 1764
+INIT_pval_pos data 1764
+INIT_pval_sgn data 1764
+ISQ_set_anim_dup function
+ISQ_snap4_to_mri_image function
+ISQ_snap_agif_rng function
+ISQ_snap_jpeg_rng function
+ISQ_snap_mpeg_rng function
+ISQ_snap_png_rng function
+ISQ_snap_to_mri_image function
+ISQ_snapfile2 function
+ISQ_snapsave function
+MCW_buthighlight function
+MCW_click_help_CB function
+MCW_hotcolor function
+MCW_invert_widget function
+MCW_invert_widget_sync function
+MCW_kill_XImage function
+MCW_new_DC function
+MCW_popup_message function
+MCW_reghelp_children function
+MCW_register_help function
+MCW_register_hint function
+MCW_set_widget_bg function
+MCW_set_widget_cursor function
+MCW_set_widget_label function
+MCW_widget_geom function
+MCW_widget_visible function
+NJ_bigmaps_init function
+SNAP_NoDuplicates function
+SNAP_OkDuplicates function
+XAllocColor function
+XAllocColorCells function
+XAllocNamedColor function
+XBell function
+XChangeGC function
+XCheckTypedWindowEvent function
+XCreateColormap function
+XCreateFontCursor function
+XCreateGC function
+XCreatePixmap function
+XCreateWindow function
+XDisplayName function
+XFree function
+XFreeColormap function
+XFreeColors function
+XGetDefault function
+XGetErrorText function
+XGetIconSizes function
+XGetInputFocus function
+XGetRGBColormaps function
+XGetVisualInfo function
+XGetWMColormapWindows function
+XGetWindowAttributes function
+XIconifyWindow function
+XInternAtom function
+XListPixmapFormats function
+XLoadQueryFont function
+XLookupString function
+XMapRaised function
+XMapWindow function
+XOpenDisplay function
+XParseColor function
+XPutImage function
+XQueryColors function
+XQueryPointer function
+XRaiseWindow function
+XScreenNumberOfScreen function
+XSetBackground function
+XSetDashes function
+XSetErrorHandler function
+XSetFont function
+XSetForeground function
+XSetWMColormapWindows function
+XStoreColor function
+XStoreColors function
+XSync function
+XTextExtents function
+XUngrabPointer function
+XUnmapWindow function
+XVisualIDFromVisual function
+XWithdrawWindow function
+XmAddProtocolCallback function
+XmCreateDrawingArea function
+XmCreateFileSelectionDialog function
+XmCreateFrame function
+XmCreateMainWindow function
+XmCreateMenuBar function
+XmCreateOptionMenu function
+XmCreatePopupMenu function
+XmCreatePulldownMenu function
+XmCreateQuestionDialog function
+XmCreateRowColumn function
+XmCreateScrolledList function
+XmCreateScrolledText function
+XmFileSelectionDoSearch function
+XmFontListAppendEntry function
+XmFontListEntryCreate function
+XmFontListEntryFree function
+XmInternAtom function
+XmListAddItemUnselected function
+XmListDeleteAllItems function
+XmListItemExists function
+XmListSelectPos function
+XmListSetPos function
+XmMessageBoxGetChild function
+XmNotebookGetPageInfo function
+XmRemoveProtocolCallback function
+XmStringCreateLocalized function
+XmStringCreateLtoR function
+XmStringFree function
+XmStringGetLtoR function
+XmTextFieldGetString function
+XmTextFieldSetString function
+XmTextGetCursorPosition function
+XmTextGetInsertionPosition function
+XmTextGetLastPosition function
+XmTextGetString function
+XmTextScroll function
+XmTextSetHighlight function
+XmTextSetInsertionPosition function
+XmTextSetString function
+XmToggleButtonGetState function
+XmToggleButtonSetState function
+XmTrackingEvent function
+XmUpdateDisplay function
+XmuLookupStandardColormap function
+XtAddCallback function
+XtAddEventHandler function
+XtAppAddTimeOut function
+XtAppAddWorkProc function
+XtAppError function
+XtAppMainLoop function
+XtAppPending function
+XtAppProcessEvent function
+XtAppSetWarningHandler function
+XtAppWarning function
+XtCallActionProc function
+XtCallCallbackList function
+XtCalloc function
+XtCloseDisplay function
+XtCreateWindow function
+XtDestroyApplicationContext function
+XtDestroyWidget function
+XtDisplay function
+XtFree function
+XtGetApplicationResources function
+XtInsertEventHandler function
+XtIsManaged function
+XtIsSensitive function
+XtMalloc function
+XtManageChild function
+XtName function
+XtNameToWidget function
+XtOpenApplication function
+XtPopdown function
+XtPopup function
+XtRealizeWidget function
+XtRealloc function
+XtRemoveAllCallbacks function
+XtRemoveCallback function
+XtRemoveEventHandler function
+XtRemoveTimeOut function
+XtRemoveWorkProc function
+XtScreen function
+XtSetSensitive function
+XtShellStrings data 1289
+XtStrings data 2649
+XtTranslateCoords function
+XtUnmanageChild function
+XtUnrealizeWidget function
+XtVaAppCreateShell function
+XtVaAppInitialize function
+XtVaCreateArgsList function
+XtVaCreateManagedWidget function
+XtVaCreatePopupShell function
+XtVaCreateWidget function
+XtVaGetValues function
+XtVaSetValues function
+XtWarning function
+XtWidgetToApplicationContext function
+XtWindow function
+XtWindowOfObject function
+_XmStrings data 20027
+_XtCheckSubclassFlag function
+_XtInherit function
+delete_memplot function
+forceExpose function
+g_needs_x11_redraw_verb data 8
+glAccum function
+glAlphaFunc function
+glBegin function
+glBindTexture function
+glBitmap function
+glBlendFunc function
+glCheckFramebufferStatus function
+glClear function
+glClearColor function
+glClearStencil function
+glClipPlane function
+glColor3f function
+glColor3fv function
+glColor4f function
+glColor4ub function
+glColorMask function
+glColorMaterial function
+glColorPointer function
+glCullFace function
+glDepthFunc function
+glDisable function
+glDisableClientState function
+glDrawArrays function
+glDrawElements function
+glDrawPixels function
+glEnable function
+glEnableClientState function
+glEnd function
+glEndList function
+glFinish function
+glFlush function
+glGenTextures function
+glGetBooleanv function
+glGetDoublev function
+glGetError function
+glGetFloatv function
+glGetIntegerv function
+glGetString function
+glHint function
+glIsEnabled function
+glLightModelfv function
+glLightfv function
+glLineStipple function
+glLineWidth function
+glLoadIdentity function
+glMaterialfv function
+glMatrixMode function
+glMultMatrixd function
+glMultMatrixf function
+glNewList function
+glNormalPointer function
+glOrtho function
+glPixelStorei function
+glPointSize function
+glPolygonMode function
+glPolygonOffset function
+glPolygonStipple function
+glPopAttrib function
+glPopMatrix function
+glPushAttrib function
+glPushMatrix function
+glRasterPos3d function
+glRasterPos3f function
+glReadPixels function
+glRotatef function
+glShadeModel function
+glStencilFunc function
+glStencilMask function
+glStencilOp function
+glTexCoord2f function
+glTexCoord3f function
+glTexEnvf function
+glTexGeni function
+glTexImage2D function
+glTexImage3D function
+glTexParameteri function
+glTranslatef function
+glVertex3d function
+glVertex3f function
+glVertex3fv function
+glVertexPointer function
+glViewport function
+glWindowPos2s function
+glXChooseVisual function
+glXCreateContext function
+glXCreateGLXPixmap function
+glXGetConfig function
+glXGetCurrentContext function
+glXGetCurrentDisplay function
+glXIsDirect function
+glXMakeCurrent function
+glXQueryExtension function
+glXQueryVersion function
+glXSwapBuffers function
+glXWaitX function
+gluDeleteQuadric function
+gluErrorString function
+gluLookAt function
+gluNewQuadric function
+gluPerspective function
+gluProject function
+gluQuadricDrawStyle function
+gluQuadricNormals function
+gluSphere function
+gluUnProject function
+glutBitmap8By13 data 8
+glutBitmap9By15 data 8
+glutBitmapCharacter function
+glutBitmapHelvetica10 data 8
+glutBitmapHelvetica12 data 8
+glutBitmapHelvetica18 data 8
+glutBitmapTimesRoman10 data 8
+glutBitmapTimesRoman24 data 8
+glutBitmapWidth function
+init_XDBE function
+memplot_to_X11_funfunfun function
+memplot_to_X11_sef function
+memplot_to_X11_set_DC function
+memplot_to_X11_set_substitute function
+memplot_to_topshell function
+memplot_topshell_setsaver function
+mri_to_XImage function
+needsX11Redraw function
+npane_big data 8
+pm_decode_geom function
+pm_donebut_CB function
+pm_expose_CB function
+pm_psfile_CB function
+pm_psprint_CB function
+pm_resize_CB function
+redraw_topshell function
+set_wintitle_memplot function
+topLevelShellWidgetClass data 8
+widgetClassRec data 224
+xmArrowButtonWidgetClass data 8
+xmCascadeButtonWidgetClass data 8
+xmDialogShellWidgetClass data 8
+xmDrawingAreaWidgetClass data 8
+xmFormWidgetClass data 8
+xmFrameWidgetClass data 8
+xmLabelWidgetClass data 8
+xmNotebookWidgetClass data 8
+xmPanedWindowWidgetClass data 8
+xmPushButtonWidgetClass data 8
+xmRowColumnWidgetClass data 8
+xmScaleWidgetClass data 8
+xmSeparatorGadgetClass data 8
+xmSeparatorWidgetClass data 8
+xmTextFieldWidgetClass data 8
+xmTextWidgetClass data 8
+xmToggleButtonWidgetClass data 8

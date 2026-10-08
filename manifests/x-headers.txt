@@ -1,0 +1,18 @@
+# Ubuntu 24.04 packages whose X11, Xt, Motif and OpenGL headers compile
+# SUMA without X (cmake/afni-nox.cmake, docs/DECISIONS.md D35). Build
+# time only: the headers are not shipped and nothing links to these
+# libraries. tools/x_headers.py downloads, checks and extracts them.
+#
+# <url> <sha512>
+http://archive.ubuntu.com/ubuntu/pool/main/libg/libglu/libglu1-mesa-dev_9.0.2-1.1build1_amd64.deb 5780b468719757f9a2335a9e5de28504175e001056d8d07d05ecef76e61c6796932df7c6037adf5f5ebad9b987a8945fa3d967aaa1b6429edbd1fb79ae08e813
+http://archive.ubuntu.com/ubuntu/pool/main/libg/libglvnd/libgl-dev_1.7.0-1build1_amd64.deb 42f5ebb0e1fca0087eb0af479fe9966e4e88983c2194e5cbb9c25366f8749438d5b04e1c780f98c3d4f8e80923b2f76c00817559e6333914c044bb1289a790a0
+http://archive.ubuntu.com/ubuntu/pool/main/libg/libglvnd/libglx-dev_1.7.0-1build1_amd64.deb de0b4c99616a2b07fd7fc06ee75d3c879409470cef8bf8783455b114ee04018b28ba9d025c16e13083e9413b69cb99d36b71ef5f052efef80720f8b6234a1029
+http://archive.ubuntu.com/ubuntu/pool/main/libi/libice/libice-dev_1.0.10-1build3_amd64.deb 95ca1685f04773fc99980e9f64dc78a848aedf8dc2d9070e4a91389d713af6dc590b1a27a1534946e00abf1294fcf61dd073e9cd6c09161db7e6eef47b18b4f5
+http://archive.ubuntu.com/ubuntu/pool/main/libs/libsm/libsm-dev_1.2.3-1build3_amd64.deb 11643b0675c746f44c12accfe6b55160de00f34f5efa9b514b9171afb4f4abe79ad85568fde7aae3125131847d4d7d3fe6a4820f2754cc2616dac5125f3d928b
+http://archive.ubuntu.com/ubuntu/pool/main/libx/libx11/libx11-dev_1.8.7-1build1_amd64.deb f0f74312f00fa97dc48bf364488f2041836fb16330786347d8f997e3172c0047dcb03050c5a10764f7c70564cb3cfc4aee34f2798108b69b88e0ede4a4d7c144
+http://archive.ubuntu.com/ubuntu/pool/main/libx/libxext/libxext-dev_1.3.4-1build2_amd64.deb 9e749667a24f9b1bedf20125ceee0dbeaf1c909944d4e5742d02e9fa6e91fd35034e95fda97026c365a99e50a64b0fee3b573d90aa697a23238dd4a6a3c65ec7
+http://archive.ubuntu.com/ubuntu/pool/main/libx/libxmu/libxmu-headers_1.1.3-3build2_all.deb 4f040db9df78bd1a76c4d718863accd74d3f369a52b5c5e0927a90b85adf1a79b378fd51c7b3d1e2a4465b957ffef4b94debc2428ba83fafaa5681387ef4543d
+http://archive.ubuntu.com/ubuntu/pool/main/libx/libxt/libxt-dev_1.2.1-1.2build1_amd64.deb 19e0cc9c440c295310c574882fa9b18d9d8aea0ec49fb774af17a01f77b1d2232fa54d7a64750f8e75e25eec7fe3bd8f792b70bf509d09f39d2b602ba632287c
+http://archive.ubuntu.com/ubuntu/pool/main/x/xorgproto/x11proto-dev_2023.2-1_all.deb 8735d84055ce113c8f9a0ce4d9798c9a58843cf2874764ad13892b84b09ff192652a65755564b50effde0da52f51edb7f3b59239b8b867872a86a973919efb46
+http://archive.ubuntu.com/ubuntu/pool/universe/f/freeglut/libglut-dev_3.4.0-1build1_amd64.deb 0caa68c2b080a1215395f63265348fa4268bd1295add7057a646526cfb31afca110c6534cb26b28d728a2c82e47c3008be544169fa04a813e5670426a8255893
+http://archive.ubuntu.com/ubuntu/pool/universe/m/motif/libmotif-dev_2.3.8-3.1build1_amd64.deb 214301d7c7c6479545ea58ec44f5c8fce8e77724e4e998a95980755ac142a89ed1821a08c9de96e495d4be727db943f2709cf7f083b0ee441fa41a9c679fac82

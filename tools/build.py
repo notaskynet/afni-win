@@ -34,10 +34,18 @@ class BuildConfig(BaseModel):
     generator: str = "Ninja"
     jobs: int | None = None
     manifests: list[Path] = Field(
-        default_factory=lambda: [REPO_ROOT / "manifests" / "programs-required.txt"]
+        default_factory=lambda: [
+            REPO_ROOT / "manifests" / "programs-required.txt",
+            REPO_ROOT / "manifests" / "programs-pipeline.txt",
+        ]
     )
     optional_manifests: list[Path] = Field(default_factory=list)
     extra_targets: list[str] = Field(default_factory=list)
+    extra_programs: list[str] = Field(default_factory=list)
+    extra_manifests: list[Path] = Field(
+        default_factory=lambda: [REPO_ROOT / "manifests" / "programs-extra.txt"]
+    )
+    cmake_defines: list[str] = Field(default_factory=list)
     patches_dir: Path = REPO_ROOT / "patches"
     toolchain: Path = REPO_ROOT / "cmake" / "toolchain-mingw.cmake"
     skip_fetch: bool = False
@@ -146,6 +154,19 @@ def apply_patches(config: BuildConfig, source: Path) -> list[str]:
     return applied
 
 
+def _extra_programs(config: BuildConfig) -> list[str]:
+    """Collect the single-file programs added to the upstream CMake project.
+
+    Args:
+        config: Build configuration.
+
+    Returns:
+        Program names from the extra manifests and ``extra_programs``.
+    """
+    names = _read_manifests(config.extra_manifests, [])
+    return names + [n for n in config.extra_programs if n not in names]
+
+
 def configure(config: BuildConfig, source: Path) -> Path:
     """Configure the upstream CMake project for Windows.
 
@@ -175,6 +196,8 @@ def configure(config: BuildConfig, source: Path) -> Path:
             "-DUSE_OMP=ON",
             f"-DFETCHCONTENT_SOURCE_DIR_NIFTI_CLIB={source / 'src' / 'nifti'}",
             f"-DFETCHCONTENT_SOURCE_DIR_GIFTI_CLIB={REPO_ROOT / 'cmake' / 'gifti'}",
+            f"-DAFNI_WIN_EXTRA_PROGRAMS={';'.join(_extra_programs(config))}",
+            *(f"-D{define}" for define in config.cmake_defines),
         ]
     )
     return build
@@ -256,7 +279,7 @@ def build(config: BuildConfig, build_dir: Path, targets: list[str]) -> tuple[lis
 
     Returns:
         Built and missing target names (programs ``<name>.exe``, libraries
-        ``lib<name>.dll``).
+        ``lib<name>.dll``, ``R_io.so``).
     """
     cmd = [
         "cmake",
@@ -274,7 +297,9 @@ def build(config: BuildConfig, build_dir: Path, targets: list[str]) -> tuple[lis
     _log_failures(result.stdout + result.stderr)
     output = build_dir / "targets_built"
     built = [
-        t for t in targets if (output / f"{t}.exe").exists() or (output / f"lib{t}.dll").exists()
+        t
+        for t in targets
+        if any((output / name).exists() for name in (f"{t}.exe", f"lib{t}.dll", f"{t}.so"))
     ]
     missing = [t for t in targets if t not in built]
     return built, missing
@@ -295,6 +320,7 @@ def run(config: BuildConfig) -> BuildResult:
     build_dir = configure(config, source)
     targets = _targets(config)
     optional = _read_manifests(config.optional_manifests, targets)
+    optional += [t for t in _extra_programs(config) if t not in targets + optional]
     defined = _defined_targets(build_dir)
     defined |= {name for name, target in TARGET_NAMES.items() if target in defined}
     undefined = [t for t in targets if t not in defined]
@@ -332,6 +358,20 @@ def _parse_args() -> BuildConfig:
         "--optional-manifest", dest="optional_manifests", type=Path, action="append", default=[]
     )
     parser.add_argument("--target", dest="extra_targets", action="append", default=[])
+    parser.add_argument(
+        "--extra-program",
+        dest="extra_programs",
+        action="append",
+        default=[],
+        help="single-file upstream program without a CMake target (built as optional)",
+    )
+    parser.add_argument(
+        "--cmake-define",
+        dest="cmake_defines",
+        action="append",
+        default=[],
+        help="extra NAME=VALUE cache entry for the upstream configure step",
+    )
     parser.add_argument("--skip-fetch", action="store_true")
     parser.add_argument("--skip-patch", action="store_true")
     args = vars(parser.parse_args())

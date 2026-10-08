@@ -1,0 +1,26 @@
+# Packages of the scripting runtime shipped with afni-win (docs/DECISIONS.md
+# D38): the MSYS2 userland that runs the tcsh scripts and the UCRT64 Python
+# that runs the Python scripts. tools.scripting copies each package and its
+# dependencies (pactree), without documentation and development files.
+# Commands the reference pipeline and its scripts run: tcsh, sh, sed, ls, cut,
+# grep, awk, dirname, rm, cat, wc, tee, tail, mkdir, basename, cp, touch,
+# printf, mv, expr, tr, date, ps, seq, rmdir, bc, perl, sort, uniq, find, diff.
+#
+# <tree> <package>
+msys tcsh
+msys bash
+msys coreutils
+msys sed
+msys grep
+msys gawk
+msys perl
+msys bc
+msys which
+msys procps-ng
+msys findutils
+msys diffutils
+msys tar
+msys gzip
+python mingw-w64-ucrt-x86_64-python
+python mingw-w64-ucrt-x86_64-python-numpy
+python mingw-w64-ucrt-x86_64-python-matplotlib

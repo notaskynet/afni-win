@@ -58,6 +58,7 @@ htonl net.c inline
 ntohs net.c inline
 ntohl net.c inline
 strcasestr string.c
+index string.c legacy BSD name of strchr
 popen shell.c sh -c through busybox.exe next to afni_compat.dll, or the sh in AFNI_COMPAT_SHELL; pipes in binary mode
 pclose shell.c waits for the shell; status encoded as by waitpid
 system shell.c same shell as popen; system(NULL) reports whether a shell is available

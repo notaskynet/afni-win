@@ -1,0 +1,21 @@
+{
+  "default": {
+    "rtol": 0.01,
+    "atol_scale": 0.01
+  },
+  "text": {
+    "rtol": 0.01
+  },
+  "overrides": [
+    {
+      "pattern": "blur_est.sub08.1D",
+      "reason": "ACF model fit of 3dFWHMx, not reproducible upstream (D29: powell_int.c reseeds from time()+getpid())",
+      "tolerance": {
+        "rtol": 0.01,
+        "atol_scale": 0.01
+      },
+      "text_rtol": 0.01,
+      "informational": true
+    }
+  ]
+}
