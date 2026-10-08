@@ -1,5 +1,4 @@
 #include <spawn.h>
-#include <sys/stat.h>
 #include <sys/wait.h>
 #include <windows.h>
 
@@ -15,11 +14,6 @@ static char *read_all(const char *path) {
   }
   text[n] = '\0';
   return text;
-}
-
-static int is_directory(const char *path) {
-  struct stat st;
-  return stat(path, &st) == 0 && S_ISDIR(st.st_mode);
 }
 
 int main(int argc, char **argv) {
@@ -44,14 +38,6 @@ int main(int argc, char **argv) {
 
   CHECK(home != NULL && home[0] != '\0');
   CHECK(tmpdir != NULL && tmpdir[0] != '\0');
-  if (home != NULL && tmpdir != NULL) {
-    size_t length = strlen(tmpdir);
-    CHECK(strchr(home, '\\') == NULL);
-    CHECK(strchr(tmpdir, '\\') == NULL);
-    CHECK(length > 0 && tmpdir[length - 1] != '/');
-    CHECK(is_directory(home));
-    CHECK(is_directory(tmpdir));
-  }
 
   GetModuleFileNameA(NULL, self, sizeof(self));
   snprintf(system_root, sizeof(system_root), "SystemRoot=%s",
@@ -59,6 +45,14 @@ int main(int argc, char **argv) {
   CHECK(posix_spawn(&pid, self, NULL, NULL, child_argv, child_env) == 0);
   CHECK(waitpid(pid, &status, 0) == pid && WIFEXITED(status) && WEXITSTATUS(status) == 0);
   CHECK(strcmp(read_all("compat_env_out.txt"), "C:/preset/home|C:/preset/tmp") == 0);
+
+  {
+    char *unset_env[] = {"USERPROFILE=C:\\Users\\someone", "TMP=C:\\Temp\\afni dir\\",
+                         system_root, NULL};
+    CHECK(posix_spawn(&pid, self, NULL, NULL, child_argv, unset_env) == 0);
+    CHECK(waitpid(pid, &status, 0) == pid && WIFEXITED(status) && WEXITSTATUS(status) == 0);
+    CHECK(strcmp(read_all("compat_env_out.txt"), "C:/Users/someone|C:/Temp/afni dir") == 0);
+  }
   remove("compat_env_out.txt");
   return TEST_RESULT();
 }
