@@ -185,19 +185,28 @@ jobs:
       - name: Fetch X11 headers
         run: python -m tools.x_headers --output-dir x-headers
 
+      # CRAN R for Windows and the CRAN packages of the AFNI R programs, pinned
+      # in manifests/r-runtime.txt (D39). Installed before the build: R_io.so
+      # is built against its headers and R.dll.
+      - name: Install R
+        run: |
+          echo "AFNI_R_HOME=$(cygpath -m "$RUNNER_TEMP")/R" >> "$GITHUB_ENV"
+          python -m tools.r_runtime --r-home "$(cygpath -m "$RUNNER_TEMP")/R" --download-dir r-download
+
       - name: Build AFNI (required programs must build, optional ones are best effort)
         run: |
           python -m tools.build --tag "$AFNI_TAG" --upstream-url "$AFNI_UPSTREAM" \
             --work-dir build-win --optional-manifest manifests/programs-optional.txt \
-            --optional-manifest manifests/models-optional.txt \
+            --optional-manifest manifests/models-optional.txt --target R_io \
             --cmake-define AFNI_WIN_PTAYLOR=ON --cmake-define AFNI_WIN_NOX=ON \
-            --cmake-define "AFNI_WIN_X_HEADERS=$(cygpath -m "$PWD/x-headers")"
+            --cmake-define "AFNI_WIN_X_HEADERS=$(cygpath -m "$PWD/x-headers")" \
+            --cmake-define "AFNI_WIN_R_HOME=$AFNI_R_HOME"
 
       - name: Package
         run: |
           python -m tools.package --build-dir build-win --source-dir build-win/upstream \
             --runtime-dir "$(cygpath -w /ucrt64/bin)" --busybox busybox64u.exe --output-dir dist \
-            --msys-root "$(cygpath -m /)"
+            --msys-root "$(cygpath -m /)" --r-home "$AFNI_R_HOME"
 
       - name: Build the installer
         shell: pwsh
