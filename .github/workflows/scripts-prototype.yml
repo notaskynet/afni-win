@@ -233,12 +233,12 @@ jobs:
           {
             echo "## Process start cost (ms per call)"
             echo
-            echo "| What | Linux | Windows (MSYS2 tcsh) | Windows (native tcsh) |"
-            echo "|---|---|---|---|"
+            echo "| What | Linux | Windows cmd-shell job (MSYS2 tcsh) | Windows posix-shell job (MSYS2 tcsh) | Windows (native tcsh) |"
+            echo "|---|---|---|---|---|"
             for what in true ccalc @GetAfniView python; do
               row="| $what"
               for f in prototype-linux/bench.txt prototype-windows-cmd-shell/bench.txt \
-                prototype-windows-cmd-shell/bench-native-tcsh.txt; do
+                prototype-windows-posix-shell/bench.txt prototype-windows-cmd-shell/bench-native-tcsh.txt; do
                 row="$row | $(awk -v w="$what" '$1 == w { print $3 }' "$f" 2>/dev/null || true)"
               done
               echo "$row |"
@@ -256,11 +256,11 @@ jobs:
               echo "$row |"
             done
             echo
-          } >> "$GITHUB_STEP_SUMMARY"
+          } | tee -a "$GITHUB_STEP_SUMMARY"
           for v in cmd-shell posix-shell; do
             if [ -d "prototype-windows-$v/outputs" ]; then
               uv run --frozen python -m tests.regression.compare --reference prototype-linux/outputs \
                 --candidate "prototype-windows-$v/outputs" --report "comparison-$v.md" || true
-              { echo "### Variant $v"; cat "comparison-$v.md"; } >> "$GITHUB_STEP_SUMMARY"
+              { echo "### Variant $v"; cat "comparison-$v.md"; } | tee -a "$GITHUB_STEP_SUMMARY"
             fi
           done
