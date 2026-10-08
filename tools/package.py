@@ -19,6 +19,7 @@ from pathlib import Path
 from pydantic import BaseModel, Field
 
 from tools.build import BuildResult
+from tools.scripting import ScriptingConfig, ScriptingResult, assemble
 
 logger = logging.getLogger(__name__)
 
@@ -42,6 +43,7 @@ class PackageConfig(BaseModel):
     output_dir: Path
     helpers: list[str] = Field(default_factory=lambda: ["qhull.exe", "cjpeg.exe", "djpeg.exe"])
     objdump: str = "objdump"
+    msys_root: Path | None = None
 
 
 class PackageResult(BaseModel):
@@ -57,6 +59,7 @@ class PackageResult(BaseModel):
     helpers: list[str]
     archive: str
     sha256: str
+    scripting: ScriptingResult | None = None
 
 
 def imported_dlls(objdump: str, path: Path) -> list[str]:
@@ -191,6 +194,13 @@ def package(config: PackageConfig) -> PackageResult:
     shutil.copy2(REPO_ROOT / "manifests" / "runtime-deps.txt", root / "licenses")
     (root / "licenses" / "busybox-w32.txt").write_text(BUSYBOX_NOTICE)
     (root / "README.txt").write_text(_readme(result, programs, [h.name for h in helpers]))
+    scripting = None
+    if config.msys_root is not None:
+        scripting = assemble(
+            ScriptingConfig(
+                package_dir=root, source_dir=config.source_dir, msys_root=config.msys_root
+            )
+        )
 
     archive = config.output_dir / f"{name}.zip"
     with zipfile.ZipFile(archive, "w", zipfile.ZIP_DEFLATED) as zf:
@@ -209,6 +219,7 @@ def package(config: PackageConfig) -> PackageResult:
         helpers=["busybox.exe", *BUSYBOX_APPLETS, *(h.name for h in helpers)],
         archive=archive.name,
         sha256=digest,
+        scripting=scripting,
     )
 
 
@@ -225,6 +236,9 @@ def _parse_args() -> PackageConfig:
     parser.add_argument("--busybox", type=Path, required=True)
     parser.add_argument("--output-dir", type=Path, required=True)
     parser.add_argument("--objdump", default="objdump")
+    parser.add_argument(
+        "--msys-root", type=Path, help="Windows path of MSYS2 /: add the scripting runtime"
+    )
     return PackageConfig(**vars(parser.parse_args()))
 
 
@@ -234,7 +248,7 @@ def main() -> None:
     config = _parse_args()
     try:
         result = package(config)
-    except (FileNotFoundError, subprocess.CalledProcessError) as error:
+    except (FileNotFoundError, ValueError, subprocess.CalledProcessError) as error:
         logger.error("%s", error)
         sys.exit(1)
     (config.output_dir / "package.json").write_text(result.model_dump_json(indent=2))
