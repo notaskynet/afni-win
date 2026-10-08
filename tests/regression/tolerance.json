@@ -17,8 +17,8 @@
       "text_rtol": 0.001
     },
     {
-      "pattern": "volreg*|allin*|qwarp*|nwarp_*|unifize*|blur_to_fwhm*|logs/volreg.*|logs/allineate.*|logs/qwarp.*|logs/nwarp_*|logs/unifize.*|logs/blur_to_fwhm.*",
-      "reason": "iterative optimisation (registration, iterative blurring): when the cost function differs in the last bits the optimiser stops at a slightly different point",
+      "pattern": "volreg*|allin*|qwarp*|nwarp_*|unifize*|blur_to_fwhm*|logs/volreg.*|logs/allineate.*|logs/qwarp.*|logs/nwarp_*|logs/unifize.*|logs/blur_to_fwhm.*|logs/cat_matvec.*",
+      "reason": "iterative optimisation (registration, iterative blurring): when the cost function differs in the last bits the optimiser stops at a slightly different point; also programs that only transform such a result (cat_matvec inverts the 3dAllineate matrix allin.aff12.1D)",
       "tolerance": {
         "rtol": 0.01,
         "atol_scale": 0.01
