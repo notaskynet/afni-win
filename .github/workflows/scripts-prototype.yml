@@ -236,7 +236,7 @@ jobs:
               row="| $what"
               for f in prototype-linux/bench.txt prototype-windows-cmd-shell/bench.txt \
                 prototype-windows-cmd-shell/bench-native-tcsh.txt; do
-                row="$row | $(awk -v w="$what" '$1 == w { print $3 }' "$f" 2>/dev/null)"
+                row="$row | $(awk -v w="$what" '$1 == w { print $3 }' "$f" 2>/dev/null || true)"
               done
               echo "$row |"
             done
@@ -248,7 +248,7 @@ jobs:
             for f in status seconds; do
               row="| $f"
               for d in prototype-linux prototype-windows-cmd-shell prototype-windows-posix-shell; do
-                row="$row | $(cat "$d/$f.txt" 2>/dev/null)"
+                row="$row | $(cat "$d/$f.txt" 2>/dev/null || true)"
               done
               echo "$row |"
             done
