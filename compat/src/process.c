@@ -478,3 +478,37 @@ int kill(pid_t pid, int sig) {
   CloseHandle(process);
   return 0;
 }
+
+static int nice_value = 0;
+
+static DWORD priority_class(int value) {
+  if (value >= 10) {
+    return IDLE_PRIORITY_CLASS;
+  }
+  if (value > 0) {
+    return BELOW_NORMAL_PRIORITY_CLASS;
+  }
+  if (value <= -10) {
+    return HIGH_PRIORITY_CLASS;
+  }
+  if (value < 0) {
+    return ABOVE_NORMAL_PRIORITY_CLASS;
+  }
+  return NORMAL_PRIORITY_CLASS;
+}
+
+int nice(int inc) {
+  int value = nice_value + inc;
+  if (value > 19) {
+    value = 19;
+  }
+  if (value < -20) {
+    value = -20;
+  }
+  if (!SetPriorityClass(GetCurrentProcess(), priority_class(value))) {
+    errno = EPERM;
+    return -1;
+  }
+  nice_value = value;
+  return value;
+}
