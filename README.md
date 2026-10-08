@@ -12,16 +12,17 @@ afni-win does not fork AFNI. For every upstream release tag it fetches the offic
 2. Run it. Windows may show *"Windows protected your PC"* because the installer is not code-signed: choose **More info → Run anyway**.
 3. Follow the wizard. Administrator rights are not needed; keep **Add AFNI to PATH** selected.
 
-Requirements: 64-bit Windows 10 or 11.
+Requirements: 64-bit Windows 10 (version 1903 or later) or 11.
 
 ### Use
 
-Open the Start menu and choose **AFNI Command Prompt**. AFNI programs work in that window:
+Open the Start menu and choose **AFNI Shell** (tcsh, as in the AFNI documentation and courses) or **AFNI Command Prompt**. AFNI programs and scripts work in both:
 
 ```bat
-cd /d C:\Users\YourName\Documents\mri
+cd /d C:\data\mri
 3dinfo anat+orig
 3dcalc -a anat+orig -expr "a*2" -prefix doubled
+afni_proc.py -help
 ```
 
 With *Add AFNI to PATH* selected they also work in any new Command Prompt or PowerShell window.
@@ -39,7 +40,10 @@ Prefer no installer? Each release also has `afni-<version>-win64.zip`: unpack it
 
 - All 53 programs of a typical single-subject pipeline (`3dcalc`, `3dvolreg`, `3dAllineate`, `3dQwarp`, `3dDeconvolve`, `3dREMLfit`, `3dttest++`, `3dClustSim`, …), see [`manifests/programs-required.txt`](manifests/programs-required.txt). Every release is built only if all of them build.
 - About 230 further command-line programs on a best-effort basis ([`manifests/programs-optional.txt`](manifests/programs-optional.txt)); each release lists the ones that did not build.
-- Not included: the graphical viewer `afni`, SUMA, the tcsh/Python pipeline scripts (such as `afni_proc.py`) and atlas datasets.
+- The AFNI scripts (`afni_proc.py`, `@SSwarper`, `3dMVM`, …) with what they need: tcsh and the usual Unix tools (from MSYS2), Python with numpy and matplotlib, and R with the packages of the AFNI R programs. Start them from the Start-menu entry **AFNI Shell** (a tcsh prompt, as in the AFNI documentation) or from any Command Prompt. Every build runs a full `afni_proc.py` pipeline on four subjects and a group analysis from the installed package and compares them with Linux ([`tests/pipeline/`](tests/pipeline/), D40).
+- `3dSkullStrip` and `1dplot` (image output) work without a display.
+- Not included: the graphical viewer `afni` (`afni -ver` works), SUMA, the HTML quality-control report of `afni_proc.py` (use `-html_review_style none`) and atlas datasets.
+- Paths with spaces are not supported (as in AFNI on Linux); install into `C:\AFNI` and keep data in folders such as `C:\data`. Folder names in other alphabets work.
 
 ### How results are checked
 
@@ -60,7 +64,8 @@ Report problems in [Issues](https://github.com/notaskynet/afni-win/issues). Plea
 | Minimal upstream patches, each explaining why the layer cannot cover the case | [`patches/`](patches/) |
 | Build driver: fetch tag, apply patches, configure, build, report | [`tools/build.py`](tools/build.py) |
 | Packaging, installer (Inno Setup), release notes, upstream tag selection, POSIX API report | [`tools/`](tools/), [`installer/`](installer/) |
-| Regression scenario and comparison | [`tests/regression/`](tests/regression/) |
+| Regression scenario and comparison; acceptance pipeline | [`tests/regression/`](tests/regression/), [`tests/pipeline/`](tests/pipeline/) |
+| Scripting runtime (tcsh/MSYS2, Python, R) and its launchers | [`tools/scripting.py`](tools/scripting.py), [`tools/r_runtime.py`](tools/r_runtime.py), [`runtime/`](runtime/) |
 | What the layer implements, what fails with `ENOSYS`, and the allowed no-ops | [`manifests/`](manifests/) |
 
 Rules of the project (no committed upstream code, no silent stubs, patches only as a last resort) are in [`CLAUDE.md`](CLAUDE.md) and [`TASK.md`](TASK.md); every design decision is recorded in [`docs/DECISIONS.md`](docs/DECISIONS.md), and the phase reports are in [`docs/reports/`](docs/reports/).
